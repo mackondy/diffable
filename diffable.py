@@ -93,6 +93,12 @@ _STYLE = """
 
         .subtitle { font-size: 14px; color: #86868b; font-weight: 400; }
 
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
         .version-control {
             display: flex;
             align-items: center;
@@ -100,6 +106,57 @@ _STYLE = """
             padding: 8px 16px;
             border-radius: 12px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .toggle-control {
+            display: flex;
+            align-items: center;
+            background: #fff;
+            padding: 8px 16px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            gap: 10px;
+        }
+        .toggle-control label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #86868b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            user-select: none;
+            cursor: pointer;
+        }
+
+        .ios-toggle {
+            position: relative;
+            width: 44px; height: 26px;
+            background: #e8e8ed;
+            border-radius: 13px;
+            border: none;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            padding: 0;
+            flex-shrink: 0;
+        }
+        .ios-toggle::after {
+            content: '';
+            position: absolute;
+            top: 2px; left: 2px;
+            width: 22px; height: 22px;
+            background: #fff;
+            border-radius: 50%;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+            transition: transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+        }
+        .ios-toggle.active {
+            background: #34c759;
+        }
+        .ios-toggle.active::after {
+            transform: translateX(18px);
+        }
+        .ios-toggle:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
         }
 
         .version-control label {
@@ -362,9 +419,15 @@ class DiffTable:
                 <h1>{_esc(self.title)}</h1>
                 <p class="subtitle">Click any row for details. Switch versions to track changes.</p>
             </div>
-            <div class="version-control">
-                <label for="v-select">Version</label>
-                <select id="v-select" class="version-select" onchange="switchVersion(this.value)"></select>
+            <div class="controls">
+                <div class="toggle-control">
+                    <label for="changes-toggle">Changes only</label>
+                    <button class="ios-toggle" id="changes-toggle" onclick="toggleChangesOnly()" disabled aria-label="Show changes only"></button>
+                </div>
+                <div class="version-control">
+                    <label for="v-select">Version</label>
+                    <select id="v-select" class="version-select" onchange="switchVersion(this.value)"></select>
+                </div>
             </div>
         </div>
 
@@ -403,6 +466,38 @@ class DiffTable:
     const VERSIONS   = {versions_json};
 
     let activeRow = null;
+    let changesOnly = false;
+
+    /* --- Changes-only toggle --- */
+    const changesToggle = document.getElementById('changes-toggle');
+    window.toggleChangesOnly = function() {{
+        changesOnly = !changesOnly;
+        changesToggle.classList.toggle('active', changesOnly);
+        applyChangesFilter();
+    }};
+
+    function updateToggleState(vIdx) {{
+        const hasPrev = vIdx > 0;
+        changesToggle.disabled = !hasPrev;
+        if (!hasPrev && changesOnly) {{
+            changesOnly = false;
+            changesToggle.classList.remove('active');
+        }}
+    }}
+
+    function applyChangesFilter() {{
+        const rows = document.querySelectorAll('#table-body tr');
+        rows.forEach(tr => {{
+            if (changesOnly) {{
+                const isDiff = tr.classList.contains('diff-added')
+                    || tr.classList.contains('diff-removed')
+                    || tr.classList.contains('diff-modified');
+                tr.style.display = isDiff ? '' : 'none';
+            }} else {{
+                tr.style.display = '';
+            }}
+        }});
+    }}
 
     /* --- Panel helpers --- */
     function openPanel() {{
@@ -435,7 +530,10 @@ class DiffTable:
 
     window.switchVersion = function(idx) {{
         closePanel();
-        renderTable(parseInt(idx));
+        const vIdx = parseInt(idx);
+        updateToggleState(vIdx);
+        renderTable(vIdx);
+        applyChangesFilter();
         const tbody = document.getElementById('table-body');
         tbody.classList.remove('fade-in');
         void tbody.offsetWidth;
