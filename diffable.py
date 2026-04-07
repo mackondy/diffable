@@ -821,6 +821,144 @@ class SpreadsheetConverter:
         return "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
 
 
+class ExcelDiff:
+    """Scan a directory of xlsx files for the same project → JSON → HTML diffs.
+
+    All xlsx files in the directory are assumed to belong to the same project.
+    They are sorted by filename to determine version order. Sheets with the
+    same name across files are treated as successive versions of the same data.
+
+    Output JSON files are named by sheet name (e.g. ``GPIO.json``), and each
+    HTML diff file is named accordingly (e.g. ``GPIO.html``).
+
+    Parameters
+    ----------
+    directory : str or Path
+        Directory containing the .xlsx files.
+    output_dir : str or Path or None
+        Where to write JSON and HTML output. Defaults to ``directory``.
+    key : str or None
+        Row identity field for diffing. If None, uses the first column.
+    data_key : str
+        Key name for the data array in the JSON. Default "data".
+    note_field : str
+        Field shown in the side panel. Default "note".
+    version_func : callable or None
+        ``(filepath) -> (version_label, date_string | None)``
+        Custom function to derive a version label and optional date from each
+        file. By default the file stem is used as the version label.
+
+    Usage::
+
+        ExcelDiff("./specs").run()
+        ExcelDiff("./specs", output_dir="./build", key="index").run()
+    """
+
+    def __init__(self, directory, *, output_dir=None, key=None, data_key="data",
+                 note_field="note", version_func=None):
+        self.directory = Path(directory)
+        self.output_dir = Path(output_dir) if output_dir else self.directory
+        self.key = key
+        self.data_key = data_key
+        self.note_field = note_field
+        self.version_func = version_func or self._default_version
+
+    def run(self):
+        """Execute the full pipeline: xlsx → JSON → HTML.
+
+        Returns
+        -------
+        list[Path]
+            Paths of the generated HTML files.
+        """
+        try:
+            import openpyxl
+        except ImportError:
+            raise ImportError(
+                "openpyxl is required for xlsx support. "
+                "Install it with: pip install openpyxl"
+            )
+
+        files = self._collect_files()
+        if not files:
+            raise FileNotFoundError(
+                f"No .xlsx files found in {self.directory}"
+            )
+
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        # sheet_name → {"versions": [...]}
+        sheet_data = {}
+
+        for filepath in files:
+            version_label, date_str = self.version_func(filepath)
+            wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+
+            for sheet_name in wb.sheetnames:
+                ws = wb[sheet_name]
+                rows_iter = ws.iter_rows(values_only=True)
+                headers = next(rows_iter, None)
+                if not headers:
+                    continue
+                headers = [str(h) if h is not None else f"col_{i}"
+                           for i, h in enumerate(headers)]
+
+                rows = []
+                for row in rows_iter:
+                    record = {}
+                    for h, val in zip(headers, row):
+                        if val is None:
+                            record[h] = ""
+                        else:
+                            record[h] = val if isinstance(val, (int, float, bool)) else str(val)
+                    rows.append(record)
+
+                version_entry = {"version": version_label}
+                if date_str:
+                    version_entry["date"] = date_str
+                version_entry[self.data_key] = rows
+
+                safe = self._safe_name(sheet_name)
+                if safe not in sheet_data:
+                    sheet_data[safe] = {"name": sheet_name, "versions": []}
+                sheet_data[safe]["versions"].append(version_entry)
+
+            wb.close()
+
+        # Write JSON and generate HTML for each sheet
+        html_outputs = []
+        for safe_name, info in sheet_data.items():
+            json_path = self.output_dir / f"{safe_name}.json"
+            with json_path.open("w", encoding="utf-8") as f:
+                json.dump({"versions": info["versions"]}, f, indent=2,
+                          ensure_ascii=False)
+
+            dt = DiffTable(
+                json_path,
+                title=info["name"],
+                key=self.key,
+                note_field=self.note_field,
+            )
+            html_outputs.append(dt.generate())
+
+        return html_outputs
+
+    def _collect_files(self):
+        """Return .xlsx files sorted by name."""
+        files = [f for f in self.directory.iterdir()
+                 if f.is_file() and f.suffix.lower() == ".xlsx"]
+        files.sort(key=lambda f: f.name)
+        return files
+
+    @staticmethod
+    def _safe_name(name):
+        return "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
+
+    @staticmethod
+    def _default_version(filepath):
+        return (filepath.stem, None)
+
+
 if __name__ == "__main__":
     t = DiffTable("eGPIO.json", title="eGPIO Register Map", key="index")
     out = t.generate()
