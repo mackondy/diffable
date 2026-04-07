@@ -23,6 +23,7 @@ The library auto-detects the data array key (any key that is not "version" or "d
 The "note" field, if present, is shown in the right-side detail panel.
 """
 
+import csv
 import json
 from pathlib import Path
 
@@ -592,6 +593,134 @@ def _esc(s):
             .replace("<", "&lt;")
             .replace(">", "&gt;")
             .replace('"', "&quot;"))
+
+
+class SpreadsheetConverter:
+    """Convert xlsx/csv files to the versioned JSON format used by DiffTable.
+
+    Parameters
+    ----------
+    source : str or Path
+        Path to an .xlsx, .xls, or .csv file.
+    output_dir : str or Path or None
+        Directory for output JSON files. Defaults to the source file's directory.
+    version : str
+        Version label for this import (e.g. "v1.0").
+    date : str or None
+        Optional date string (e.g. "April 2026").
+    data_key : str
+        Key name for the data array in the JSON. Default "data".
+
+    Usage::
+
+        # CSV
+        SpreadsheetConverter("pins.csv", version="v1.0").convert()
+
+        # Excel — each sheet becomes its own JSON file
+        SpreadsheetConverter("spec.xlsx", version="v2.0").convert()
+
+        # Append a new version to existing JSON files
+        SpreadsheetConverter("spec.xlsx", version="v2.1").convert(append=True)
+    """
+
+    def __init__(self, source, *, output_dir=None, version="v1.0", date=None,
+                 data_key="data"):
+        self.source = Path(source)
+        self.output_dir = Path(output_dir) if output_dir else self.source.parent
+        self.version = version
+        self.date = date
+        self.data_key = data_key
+
+    def convert(self, append=False):
+        """Convert the source file and write JSON files.
+
+        Parameters
+        ----------
+        append : bool
+            If True and the output JSON already exists, append as a new version
+            entry instead of overwriting. Default False.
+
+        Returns
+        -------
+        list[Path]
+            Paths of the generated JSON files.
+        """
+        suffix = self.source.suffix.lower()
+        if suffix == ".csv":
+            sheets = {"": self._read_csv()}
+        elif suffix in (".xlsx", ".xls"):
+            sheets = self._read_excel()
+        else:
+            raise ValueError(f"Unsupported file type: {suffix}")
+
+        stem = self.source.stem
+        outputs = []
+        for sheet_name, rows in sheets.items():
+            if sheet_name:
+                filename = f"{stem}_{self._safe_name(sheet_name)}.json"
+            else:
+                filename = f"{stem}.json"
+            out_path = self.output_dir / filename
+
+            version_entry = {"version": self.version}
+            if self.date:
+                version_entry["date"] = self.date
+            version_entry[self.data_key] = rows
+
+            if append and out_path.exists():
+                with out_path.open("r", encoding="utf-8") as f:
+                    existing = json.load(f)
+                existing["versions"].append(version_entry)
+            else:
+                existing = {"versions": [version_entry]}
+
+            with out_path.open("w", encoding="utf-8") as f:
+                json.dump(existing, f, indent=2, ensure_ascii=False)
+
+            outputs.append(out_path)
+
+        return outputs
+
+    def _read_csv(self):
+        with self.source.open("r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            return [dict(row) for row in reader]
+
+    def _read_excel(self):
+        try:
+            import openpyxl
+        except ImportError:
+            raise ImportError(
+                "openpyxl is required for xlsx support. "
+                "Install it with: pip install openpyxl"
+            )
+
+        wb = openpyxl.load_workbook(self.source, read_only=True, data_only=True)
+        sheets = {}
+        for name in wb.sheetnames:
+            ws = wb[name]
+            rows_iter = ws.iter_rows(values_only=True)
+            headers = next(rows_iter, None)
+            if not headers:
+                continue
+            headers = [str(h) if h is not None else f"col_{i}"
+                       for i, h in enumerate(headers)]
+            rows = []
+            for row in rows_iter:
+                record = {}
+                for h, val in zip(headers, row):
+                    if val is None:
+                        record[h] = ""
+                    else:
+                        record[h] = val if isinstance(val, (int, float, bool)) else str(val)
+                rows.append(record)
+            sheets[name] = rows
+        wb.close()
+        return sheets
+
+    @staticmethod
+    def _safe_name(name):
+        return "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
 
 
 if __name__ == "__main__":
