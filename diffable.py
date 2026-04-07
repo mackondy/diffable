@@ -453,25 +453,33 @@ class DiffTable:
         const prev = vIdx > 0 ? VERSIONS[vIdx - 1] : null;
         const cData = curr[DATA_KEY] || [];
         const pData = prev ? (prev[DATA_KEY] || []) : [];
-        const cMap = new Map(cData.map(r => [r[KEY], r]));
-        const pMap = new Map(pData.map(r => [r[KEY], r]));
+        const cMap = new Map(cData.filter(r => r[KEY] != null && r[KEY] !== '').map(r => [r[KEY], r]));
+        const pMap = new Map(pData.filter(r => r[KEY] != null && r[KEY] !== '').map(r => [r[KEY], r]));
 
-        const allKeys = new Set([...cMap.keys(), ...pMap.keys()]);
-        const sorted = Array.from(allKeys).sort((a, b) => {{
-            if (typeof a === 'number' && typeof b === 'number') return a - b;
-            return String(a).localeCompare(String(b));
-        }});
+        // Build ordered list from current version (preserves JSON order, including empty rows)
+        const ordered = [];
+        const usedKeys = new Set();
+        for (const row of cData) {{
+            if (row[KEY] == null || row[KEY] === '') {{
+                ordered.push(null); // spacer
+            }} else {{
+                ordered.push(row[KEY]);
+                usedKeys.add(row[KEY]);
+            }}
+        }}
+        // Append removed rows (in prev but not in curr) at the end
+        for (const pk of pMap.keys()) {{
+            if (!usedKeys.has(pk)) ordered.push(pk);
+        }}
 
         let html = '';
-        let prevK = null;
 
-        for (const k of sorted) {{
-            // Spacer for non-consecutive numeric keys
-            if (prevK !== null && typeof k === 'number' && typeof prevK === 'number' && k !== prevK + 1) {{
+        for (const k of ordered) {{
+            if (k === null) {{
                 html += '<tr class="spacer-row"><th></th>'
-                    + '<td colspan="' + (COLS.length - 1) + '" style="text-align:center;color:#86868b;font-size:14px">&hellip;</td></tr>';
+                    + '<td colspan="' + (COLS.length - 1) + '"></td></tr>';
+                continue;
             }}
-            prevK = k;
 
             const c = cMap.get(k);
             const p = pMap.get(k);
@@ -499,7 +507,7 @@ class DiffTable:
             if (status === 'removed')  cls = 'diff-removed';
             if (status === 'modified') cls = 'diff-modified';
 
-            const rowIdx = sorted.indexOf(k);
+            const rowIdx = ordered.indexOf(k);
             const onclick = status === 'removed'
                 ? ''
                 : 'onclick="showDetails(' + rowIdx + ', this)"';
@@ -527,13 +535,13 @@ class DiffTable:
         document.getElementById('table-body').innerHTML = html;
 
         // Store current diff data for panel use
-        window._diffState = {{ cMap, pMap, sorted, prev, status: null }};
+        window._diffState = {{ cMap, pMap, ordered, prev, status: null }};
     }}
 
     /* --- Side panel details --- */
     window.showDetails = function(rowIdx, tr) {{
         setActiveRow(tr);
-        const k = window._diffState.sorted[rowIdx];
+        const k = window._diffState.ordered[rowIdx];
         const c = window._diffState.cMap.get(k);
         const p = window._diffState.prev ? window._diffState.pMap.get(k) : null;
         const item = c || p;
