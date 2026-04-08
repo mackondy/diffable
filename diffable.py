@@ -162,10 +162,12 @@ class DiffTable:
         col_headers = "".join(
             f"<th>{self._col_label(c)}</th>" for c in display_cols
         )
+        col_labels = [c.replace("_", " ").title() for c in display_cols]
         script = JS_TEMPLATE.substitute(
             KEY=json.dumps(key),
             DATA_KEY=json.dumps(data_key),
             COLS=json.dumps(display_cols),
+            COL_LABELS=json.dumps(col_labels),
             NOTE_FIELD=json.dumps(self.note_field),
             VERSIONS=json.dumps(versions),
         )

@@ -166,6 +166,10 @@ STYLE = """
             text-align: left;
             border-bottom: 1px solid #f0f0f5;
             border-right: 1px solid #e8e8ed;
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         td {
@@ -173,6 +177,10 @@ STYLE = """
             font-size: 14px;
             color: #1d1d1f;
             border-bottom: 1px solid #f0f0f5;
+            max-width: 220px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         tr:last-child th, tr:last-child td { border-bottom: none; }
@@ -274,6 +282,7 @@ JS_TEMPLATE = Template("""
     const KEY        = $KEY;
     const DATA_KEY   = $DATA_KEY;
     const COLS       = $COLS;
+    const COL_LABELS = $COL_LABELS;
     const NOTE_FIELD = $NOTE_FIELD;
     const VERSIONS   = $VERSIONS;
 
@@ -482,11 +491,8 @@ JS_TEMPLATE = Template("""
             if (status === 'modified') cls = 'diff-modified';
 
             const rowIdx = ri;
-            const onclick = status === 'removed'
-                ? ''
-                : 'onclick="showDetails(' + rowIdx + ', this)"';
 
-            html += '<tr class="' + cls + '" ' + onclick + '>';
+            html += '<tr class="' + cls + '">';
             for (let ci = 0; ci < COLS.length; ci++) {
                 const col = COLS[ci];
                 const cVal = esc(c ? c[col] : item[col]);
@@ -498,10 +504,13 @@ JS_TEMPLATE = Template("""
                 } else {
                     cell = esc(item[col]);
                 }
+                const cellClick = status === 'removed'
+                    ? ''
+                    : ' onclick="showCellDetails(' + rowIdx + ',' + ci + ',this)"';
                 if (ci === 0) {
-                    html += '<th>' + cell + '</th>';
+                    html += '<th' + cellClick + '>' + cell + '</th>';
                 } else {
-                    html += '<td>' + cell + '</td>';
+                    html += '<td' + cellClick + '>' + cell + '</td>';
                 }
             }
             html += '</tr>';
@@ -517,15 +526,36 @@ JS_TEMPLATE = Template("""
     const TAG_LABELS = { added: 'Added', removed: 'Removed', modified: 'Modified' };
     const TAG_CLASSES = { added: 'tag-added', removed: 'tag-removed', modified: 'tag-modified' };
 
-    window.showDetails = function(rowIdx, tr) {
+    window.showCellDetails = function(rowIdx, colIdx, cell) {
+        const tr = cell.closest('tr');
         setActiveRow(tr);
         const k = window._diffState.ordered[rowIdx];
         const c = window._diffState.cMap.get(k);
         const p = window._diffState.prev ? window._diffState.pMap.get(k) : null;
         const item = c || p;
         const rowStatus = window._diffState.statusMap.get(k) || 'unchanged';
+        const col = COLS[colIdx];
+        const colLabel = COL_LABELS[colIdx];
 
         let html = '';
+
+        // Cell full value
+        const cVal = c ? String(c[col] ?? '') : '';
+        const pVal = p ? String(p[col] ?? '') : '';
+        const cellChanged = rowStatus === 'modified' && cVal !== pVal;
+
+        if (cellChanged) {
+            const d = inlineDiff(pVal, cVal);
+            html += '<div class="detail-section"><div class="detail-label">' + esc(colLabel) + ' (changed)</div>'
+                + '<div class="note-block" style="border-left-color:#d73a49;opacity:0.7;margin-bottom:8px"><span class="diff-old" style="text-decoration:line-through;font-size:inherit;opacity:1">' + d.oldHtml + '</span></div>'
+                + '<div class="note-block"><span class="diff-new" style="font-weight:inherit;color:inherit">' + d.newHtml + '</span></div></div>';
+        } else {
+            const val = String(item[col] ?? '');
+            if (val) {
+                html += '<div class="detail-section"><div class="detail-label">' + esc(colLabel) + '</div>'
+                    + '<div class="detail-value">' + esc(val) + '</div></div>';
+            }
+        }
 
         // Note section
         const note = item[NOTE_FIELD];
@@ -534,7 +564,7 @@ JS_TEMPLATE = Template("""
                 + '<div class="note-block">' + esc(note) + '</div></div>';
         }
 
-        // Panel header: status tag or plain "Details"
+        // Panel header: status tag
         const panelTitle = document.getElementById('panel-title');
         if (rowStatus !== 'unchanged') {
             panelTitle.innerHTML = '<span class="status-tag ' + TAG_CLASSES[rowStatus] + '">'
