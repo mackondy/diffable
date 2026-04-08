@@ -18,9 +18,7 @@ STYLE = """
             flex: 1;
             overflow-y: auto;
             padding: 48px 40px;
-            transition: margin-right 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
         }
-        .main-content.panel-open { margin-right: 420px; }
 
         .header-bar {
             display: flex;
@@ -207,8 +205,8 @@ STYLE = """
         .diff-removed { background-color: #ffeef0 !important; color: #a40e26 !important; cursor: not-allowed; }
         .diff-removed td, .diff-removed th { color: #a40e26 !important; text-decoration: line-through; }
 
-        .diff-modified { background-color: #fff8c5 !important; }
-        .diff-modified:hover { background-color: #fcf1a5 !important; }
+        td.cell-modified, th.cell-modified { background-color: #fff8c5 !important; }
+        td.cell-modified:hover, th.cell-modified:hover { background-color: #fcf1a5 !important; }
 
         .diff-old { color: #d73a49; text-decoration: line-through; margin-right: 6px; font-size: 0.9em; opacity: 0.8; }
         .diff-new { color: #22863a; font-weight: 600; }
@@ -318,7 +316,7 @@ JS_TEMPLATE = Template("""
             if (changesOnly) {
                 const isDiff = tr.classList.contains('diff-added')
                     || tr.classList.contains('diff-removed')
-                    || tr.classList.contains('diff-modified');
+                    || tr.querySelector('.cell-modified');
                 tr.style.display = isDiff ? '' : 'none';
             } else {
                 tr.style.display = '';
@@ -329,11 +327,9 @@ JS_TEMPLATE = Template("""
     /* --- Panel helpers --- */
     function openPanel() {
         document.getElementById('detail-panel').classList.add('open');
-        document.getElementById('main-content').classList.add('panel-open');
     }
     function closePanel() {
         document.getElementById('detail-panel').classList.remove('open');
-        document.getElementById('main-content').classList.remove('panel-open');
         if (activeCell) { activeCell.classList.remove('cell-active'); activeCell = null; }
     }
     window.closePanel = closePanel;
@@ -491,22 +487,23 @@ JS_TEMPLATE = Template("""
             statusMap.set(k, status);
 
             const item = c || p;
-            let cls = '';
-            if (status === 'added')    cls = 'diff-added';
-            if (status === 'removed')  cls = 'diff-removed';
-            if (status === 'modified') cls = 'diff-modified';
+            let rowCls = '';
+            if (status === 'added')   rowCls = 'diff-added';
+            if (status === 'removed') rowCls = 'diff-removed';
 
             const rowIdx = ri;
 
-            html += '<tr class="' + cls + '">';
+            html += '<tr class="' + rowCls + '">';
             for (let ci = 0; ci < COLS.length; ci++) {
                 const col = COLS[ci];
                 const cVal = esc(c ? c[col] : item[col]);
                 const pVal = esc(p ? p[col] : '');
                 let cell;
+                let cellCls = '';
                 if (status === 'modified' && c && p && String(c[col] ?? '') !== String(p[col] ?? '')) {
                     const d = inlineDiff(p[col], c[col]);
                     cell = '<span class="diff-old">' + d.oldHtml + '</span><span class="diff-new">' + d.newHtml + '</span>';
+                    cellCls = ' cell-modified';
                 } else {
                     cell = esc(item[col]);
                 }
@@ -515,9 +512,9 @@ JS_TEMPLATE = Template("""
                     : ' onclick="showCellDetails(' + rowIdx + ',' + ci + ',this)"';
                 const dataAttrs = ' data-row="' + rowIdx + '" data-col="' + ci + '"';
                 if (ci === 0) {
-                    html += '<th' + dataAttrs + cellClick + '>' + cell + '</th>';
+                    html += '<th class="' + cellCls + '"' + dataAttrs + cellClick + '>' + cell + '</th>';
                 } else {
-                    html += '<td' + dataAttrs + cellClick + '>' + cell + '</td>';
+                    html += '<td class="' + cellCls + '"' + dataAttrs + cellClick + '>' + cell + '</td>';
                 }
             }
             html += '</tr>';
@@ -552,9 +549,8 @@ JS_TEMPLATE = Template("""
 
         if (cellChanged) {
             const d = inlineDiff(pVal, cVal);
-            html += '<div class="detail-section"><div class="detail-label">' + esc(colLabel) + ' (changed)</div>'
-                + '<div class="note-block" style="border-left-color:#d73a49;opacity:0.7;margin-bottom:8px"><span class="diff-old" style="text-decoration:line-through;font-size:inherit;opacity:1">' + d.oldHtml + '</span></div>'
-                + '<div class="note-block"><span class="diff-new" style="font-weight:inherit;color:inherit">' + d.newHtml + '</span></div></div>';
+            html += '<div class="detail-section"><div class="detail-label">' + esc(colLabel) + '</div>'
+                + '<div class="detail-value"><span class="diff-old">' + d.oldHtml + '</span> <span class="diff-new">' + d.newHtml + '</span></div></div>';
         } else {
             const val = String(item[col] ?? '');
             if (val) {
