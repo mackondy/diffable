@@ -266,16 +266,18 @@ class ExcelDiff:
     data_key : str — key for the data array. Default "data".
     note_field : str — field shown in the side panel. Default "note".
     version_func : callable or None — ``(filepath) -> (version_label, date | None)``.
+    recent : int or None — only use the last N files (by name). None means all.
     """
 
     def __init__(self, directory, *, output_dir=None, key=None, data_key="data",
-                 note_field="note", version_func=None):
+                 note_field="note", version_func=None, recent=None):
         self.directory = Path(directory)
         self.output_dir = Path(output_dir) if output_dir else self.directory
         self.key = key
         self.data_key = data_key
         self.note_field = note_field
         self.version_func = version_func or (lambda fp: (fp.stem, None))
+        self.recent = recent
 
     def run(self):
         """Execute the full pipeline: xlsx -> JSON -> HTML. Returns list[Path]."""
@@ -288,6 +290,9 @@ class ExcelDiff:
         )
         if not files:
             raise FileNotFoundError(f"No .xlsx files found in {self.directory}")
+
+        if self.recent is not None:
+            files = files[-self.recent:]
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -335,4 +340,8 @@ class ExcelDiff:
 if __name__ == "__main__":
     filepath = Path(__file__).parent / "eGPIO.json"
     t = DiffTable(filepath, title="eGPIO Register Map", key="index")
+    out = t.generate()
+
+    filepath = Path(__file__).parent / "eRST.json"
+    t = DiffTable(filepath, title="eRST Register Map", key="index")
     out = t.generate()
