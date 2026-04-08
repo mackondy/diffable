@@ -334,4 +334,3 @@ if __name__ == "__main__":
     filepath = Path(__file__).parent / "eGPIO.json"
     t = DiffTable(filepath, title="eGPIO Register Map", key="index")
     out = t.generate()
-    print(f"Generated: {out}")
