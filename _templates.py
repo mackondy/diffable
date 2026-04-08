@@ -12,34 +12,49 @@ STYLE = """
             -webkit-font-smoothing: antialiased;
         }
 
-        /* --- macOS-style scrollbars --- */
-        .main-content::-webkit-scrollbar,
-        .table-scroll::-webkit-scrollbar {
+        /* --- Scrollbars: macOS (thin, overlay) --- */
+        .os-mac .table-scroll::-webkit-scrollbar {
             width: 8px;
             height: 8px;
         }
-        .main-content::-webkit-scrollbar-track,
-        .table-scroll::-webkit-scrollbar-track {
+        .os-mac .table-scroll::-webkit-scrollbar-track {
             background: transparent;
         }
-        .main-content::-webkit-scrollbar-thumb,
-        .table-scroll::-webkit-scrollbar-thumb {
+        .os-mac .table-scroll::-webkit-scrollbar-thumb {
             background: rgba(0,0,0,0.2);
             border-radius: 4px;
             border: 2px solid transparent;
             background-clip: padding-box;
         }
-        .main-content::-webkit-scrollbar-thumb:hover,
-        .table-scroll::-webkit-scrollbar-thumb:hover {
+        .os-mac .table-scroll::-webkit-scrollbar-thumb:hover {
             background: rgba(0,0,0,0.35);
             border: 2px solid transparent;
             background-clip: padding-box;
         }
-        /* Firefox */
-        .main-content,
-        .table-scroll {
+        .os-mac .table-scroll {
             scrollbar-width: thin;
             scrollbar-color: rgba(0,0,0,0.2) transparent;
+        }
+
+        /* --- Scrollbars: Windows (always visible) --- */
+        .os-win .table-scroll::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        .os-win .table-scroll::-webkit-scrollbar-track {
+            background: #f0f0f5;
+            border-radius: 5px;
+        }
+        .os-win .table-scroll::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.25);
+            border-radius: 5px;
+        }
+        .os-win .table-scroll::-webkit-scrollbar-thumb:hover {
+            background: rgba(0,0,0,0.4);
+        }
+        .os-win .table-scroll {
+            scrollbar-width: auto;
+            scrollbar-color: rgba(0,0,0,0.25) #f0f0f5;
         }
 
         .layout { display: flex; height: 100vh; }
@@ -337,6 +352,10 @@ STYLE = """
 
 JS_TEMPLATE = Template("""
 (function() {
+    /* --- OS detection for scrollbar styling --- */
+    const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
+    document.body.classList.add(isMac ? 'os-mac' : 'os-win');
+
     const KEY        = $KEY;
     const DATA_KEY   = $DATA_KEY;
     const COLS       = $COLS;
