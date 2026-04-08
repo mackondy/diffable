@@ -360,8 +360,8 @@ JS_TEMPLATE = Template("""
 
     /* --- Inline word-level diff (like difflib.SequenceMatcher) --- */
     function inlineDiff(oldStr, newStr) {
-        const oldWords = String(oldStr ?? '').split(/(\s+)/);
-        const newWords = String(newStr ?? '').split(/(\s+)/);
+        const oldWords = String(oldStr ?? '').split(/(\\s+)/);
+        const newWords = String(newStr ?? '').split(/(\\s+)/);
 
         // LCS table for word sequences
         const m = oldWords.length, n = newWords.length;
