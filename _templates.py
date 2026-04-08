@@ -272,7 +272,7 @@ JS_TEMPLATE = Template("""
     const VERSIONS   = $VERSIONS;
 
     let activeRow = null;
-    let changesOnly = false;
+    let changesOnly = true;
 
     /* --- Changes-only toggle --- */
     const changesToggle = document.getElementById('changes-toggle');
@@ -564,7 +564,7 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
             <div class="controls">
                 <div class="control-pill toggle-control">
                     <label for="changes-toggle">Changes only</label>
-                    <button class="ios-toggle" id="changes-toggle" onclick="toggleChangesOnly()" disabled aria-label="Show changes only"></button>
+                    <button class="ios-toggle active" id="changes-toggle" onclick="toggleChangesOnly()" disabled aria-label="Show changes only"></button>
                 </div>
                 <div class="control-pill version-control">
                     <label for="v-select">Version</label>
