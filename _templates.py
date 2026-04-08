@@ -404,18 +404,35 @@ JS_TEMPLATE = Template("""
         const prev = vIdx > 0 ? VERSIONS[vIdx - 1] : null;
         const cData = curr[DATA_KEY] || [];
         const pData = prev ? (prev[DATA_KEY] || []) : [];
-        const cMap = new Map(cData.filter(r => r[KEY] != null && r[KEY] !== '').map(r => [r[KEY], r]));
-        const pMap = new Map(pData.filter(r => r[KEY] != null && r[KEY] !== '').map(r => [r[KEY], r]));
+
+        // Build maps using (key, occurrence) composite keys to handle duplicates
+        function buildMap(data) {
+            const map = new Map();
+            const occ = {};
+            for (const r of data) {
+                if (r[KEY] == null || r[KEY] === '') continue;
+                const k = r[KEY];
+                occ[k] = (occ[k] || 0) + 1;
+                map.set(k + '\0' + occ[k], r);
+            }
+            return map;
+        }
+        const cMap = buildMap(cData);
+        const pMap = buildMap(pData);
 
         // Build ordered list from current version (preserves JSON order, including empty rows)
         const ordered = [];
         const usedKeys = new Set();
+        const cOcc = {};
         for (const row of cData) {
             if (row[KEY] == null || row[KEY] === '') {
                 ordered.push(null); // spacer
             } else {
-                ordered.push(row[KEY]);
-                usedKeys.add(row[KEY]);
+                const k = row[KEY];
+                cOcc[k] = (cOcc[k] || 0) + 1;
+                const ck = k + '\0' + cOcc[k];
+                ordered.push(ck);
+                usedKeys.add(ck);
             }
         }
         // Append removed rows (in prev but not in curr) at the end
@@ -426,7 +443,8 @@ JS_TEMPLATE = Template("""
         let html = '';
         const statusMap = new Map();
 
-        for (const k of ordered) {
+        for (let ri = 0; ri < ordered.length; ri++) {
+            const k = ordered[ri];
             if (k === null) {
                 html += '<tr class="spacer-row"><th></th>'
                     + '<td colspan="' + (COLS.length - 1) + '"></td></tr>';
@@ -457,7 +475,7 @@ JS_TEMPLATE = Template("""
             if (status === 'removed')  cls = 'diff-removed';
             if (status === 'modified') cls = 'diff-modified';
 
-            const rowIdx = ordered.indexOf(k);
+            const rowIdx = ri;
             const onclick = status === 'removed'
                 ? ''
                 : 'onclick="showDetails(' + rowIdx + ', this)"';
