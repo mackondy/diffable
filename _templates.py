@@ -43,17 +43,17 @@ STYLE = """
 
         .controls {
             display: flex;
-            align-items: center;
+            align-items: stretch;
             gap: 16px;
         }
 
         .control-pill {
             display: flex;
             align-items: center;
-            background: #fff;
+            justify-content: center;
+            background: rgba(0,0,0,0.03);
             padding: 8px 16px;
             border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
         }
         .control-pill.toggle-control { gap: 10px; }
         .control-pill label {
@@ -69,6 +69,7 @@ STYLE = """
         }
         .control-pill.version-control label {
             margin-right: 12px;
+            flex-shrink: 0;
         }
 
         .ios-toggle {
