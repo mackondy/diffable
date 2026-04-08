@@ -599,10 +599,6 @@ class DiffTable:
                 for (const col of COLS) {{
                     if (String(c[col] ?? '') !== String(p[col] ?? '')) {{ status = 'modified'; break; }}
                 }}
-                // Also check note field
-                if (status === 'unchanged' && String(c[NOTE_FIELD] ?? '') !== String(p[NOTE_FIELD] ?? '')) {{
-                    status = 'modified';
-                }}
             }}
 
             statusMap.set(k, status);
@@ -668,21 +664,11 @@ class DiffTable:
         // Note section
         const note = item[NOTE_FIELD];
         if (note) {{
-            let noteHtml;
-            const pNote = p ? String(p[NOTE_FIELD] ?? '') : '';
-            const cNote = c ? String(c[NOTE_FIELD] ?? '') : '';
-            if (p && cNote !== pNote && pNote) {{
-                noteHtml = '<div class="detail-section"><div class="detail-label">Note (changed)</div>'
-                    + '<div class="note-block" style="border-left-color:#d73a49;opacity:0.7;margin-bottom:8px;text-decoration:line-through">' + esc(pNote) + '</div>'
-                    + '<div class="note-block">' + esc(cNote) + '</div></div>';
-            }} else {{
-                noteHtml = '<div class="detail-section"><div class="detail-label">Note</div>'
-                    + '<div class="note-block">' + esc(note) + '</div></div>';
-            }}
-            html += noteHtml;
+            html += '<div class="detail-section"><div class="detail-label">Note</div>'
+                + '<div class="note-block">' + esc(note) + '</div></div>';
         }}
 
-        document.getElementById('panel-title').innerText = String(item[KEY]);
+        document.getElementById('panel-title').innerText = 'Details';
         document.getElementById('panel-body').innerHTML = html;
         openPanel();
     }};
@@ -978,6 +964,7 @@ class ExcelDiff:
 
 
 if __name__ == "__main__":
-    t = DiffTable("eGPIO.json", title="eGPIO Register Map", key="index")
+    filepath = Path(__file__).parent / "eGPIO.json"
+    t = DiffTable(filepath, title="eGPIO Register Map", key="index")
     out = t.generate()
     print(f"Generated: {out}")
