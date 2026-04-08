@@ -98,8 +98,8 @@ STYLE = """
 
         .version-select {
             border: 1px solid #e8e8ed;
-            border-radius: 6px;
-            padding: 6px 12px;
+            border-radius: 8px;
+            padding: 8px 32px 8px 14px;
             font-size: 14px;
             font-weight: 500;
             color: #1d1d1f;
@@ -107,6 +107,11 @@ STYLE = """
             cursor: pointer;
             outline: none;
             transition: all 0.2s;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2386868b' d='M6 8.825a.5.5 0 0 1-.354-.146L2.11 5.143a.5.5 0 1 1 .707-.707L6 7.618l3.182-3.182a.5.5 0 1 1 .707.707L6.354 8.679A.5.5 0 0 1 6 8.825z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
         }
         .version-select:focus, .version-select:hover {
             border-color: #0071e3;
