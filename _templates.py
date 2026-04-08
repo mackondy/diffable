@@ -192,6 +192,8 @@ STYLE = """
 
         .diff-old { color: #d73a49; text-decoration: line-through; margin-right: 6px; font-size: 0.9em; opacity: 0.8; }
         .diff-new { color: #22863a; font-weight: 600; }
+        .diff-old .hi { background-color: #fdb8c0; border-radius: 2px; padding: 0 1px; }
+        .diff-new .hi { background-color: #acf2bd; border-radius: 2px; padding: 0 1px; }
 
         /* --- Side panel --- */
         .detail-panel {
@@ -350,6 +352,52 @@ JS_TEMPLATE = Template("""
         return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    /* --- Inline word-level diff (like difflib.SequenceMatcher) --- */
+    function inlineDiff(oldStr, newStr) {
+        const oldWords = String(oldStr ?? '').split(/(\s+)/);
+        const newWords = String(newStr ?? '').split(/(\s+)/);
+
+        // LCS table for word sequences
+        const m = oldWords.length, n = newWords.length;
+        const dp = Array.from({length: m + 1}, () => new Uint16Array(n + 1));
+        for (let i = 1; i <= m; i++)
+            for (let j = 1; j <= n; j++)
+                dp[i][j] = oldWords[i-1] === newWords[j-1]
+                    ? dp[i-1][j-1] + 1
+                    : Math.max(dp[i-1][j], dp[i][j-1]);
+
+        // Backtrack to get opcodes
+        const ops = [];
+        let i = m, j = n;
+        while (i > 0 || j > 0) {
+            if (i > 0 && j > 0 && oldWords[i-1] === newWords[j-1]) {
+                ops.push(['equal', i-1, j-1]);
+                i--; j--;
+            } else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) {
+                ops.push(['insert', -1, j-1]);
+                j--;
+            } else {
+                ops.push(['delete', i-1, -1]);
+                i--;
+            }
+        }
+        ops.reverse();
+
+        let oldHtml = '', newHtml = '';
+        for (const [op, oi, ni] of ops) {
+            if (op === 'equal') {
+                const w = esc(oldWords[oi]);
+                oldHtml += w;
+                newHtml += w;
+            } else if (op === 'delete') {
+                oldHtml += '<span class="hi">' + esc(oldWords[oi]) + '</span>';
+            } else {
+                newHtml += '<span class="hi">' + esc(newWords[ni]) + '</span>';
+            }
+        }
+        return { oldHtml, newHtml };
+    }
+
     /* --- Diff logic --- */
     function renderTable(vIdx) {
         const curr = VERSIONS[vIdx];
@@ -421,7 +469,8 @@ JS_TEMPLATE = Template("""
                 const pVal = esc(p ? p[col] : '');
                 let cell;
                 if (status === 'modified' && c && p && String(c[col] ?? '') !== String(p[col] ?? '')) {
-                    cell = '<span class="diff-old">' + pVal + '</span><span class="diff-new">' + cVal + '</span>';
+                    const d = inlineDiff(p[col], c[col]);
+                    cell = '<span class="diff-old">' + d.oldHtml + '</span><span class="diff-new">' + d.newHtml + '</span>';
                 } else {
                     cell = esc(item[col]);
                 }
