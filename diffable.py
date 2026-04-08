@@ -185,16 +185,26 @@ _STYLE = """
             box-shadow: 0 0 0 3px rgba(0,113,227,0.1);
         }
 
-        .legend {
-            display: flex;
-            gap: 16px;
+        .status-tag {
+            display: inline-block;
             font-size: 12px;
-            margin-bottom: 16px;
-            color: #86868b;
-            font-weight: 500;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            padding: 4px 10px;
+            border-radius: 6px;
         }
-        .legend-item { display: flex; align-items: center; gap: 6px; }
-        .legend-color { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.1); }
+        .status-tag.tag-added {
+            background: #e6ffed;
+            color: #1a7f37;
+        }
+        .status-tag.tag-removed {
+            background: #ffeef0;
+            color: #a40e26;
+        }
+        .status-tag.tag-modified {
+            background: #fff8c5;
+            color: #7a6d1a;
+        }
 
         table {
             width: 100%;
@@ -431,12 +441,6 @@ class DiffTable:
             </div>
         </div>
 
-        <div class="legend">
-            <div class="legend-item"><div class="legend-color" style="background:#e6ffed;"></div> Added</div>
-            <div class="legend-item"><div class="legend-color" style="background:#ffeef0;"></div> Removed</div>
-            <div class="legend-item"><div class="legend-color" style="background:#fff8c5;"></div> Modified</div>
-        </div>
-
         <table>
             <thead><tr>{col_headers}</tr></thead>
             <tbody id="table-body"></tbody>
@@ -572,6 +576,7 @@ class DiffTable:
         }}
 
         let html = '';
+        const statusMap = new Map();
 
         for (const k of ordered) {{
             if (k === null) {{
@@ -599,6 +604,8 @@ class DiffTable:
                     status = 'modified';
                 }}
             }}
+
+            statusMap.set(k, status);
 
             const item = c || p;
             let cls = '';
@@ -634,18 +641,29 @@ class DiffTable:
         document.getElementById('table-body').innerHTML = html;
 
         // Store current diff data for panel use
-        window._diffState = {{ cMap, pMap, ordered, prev, status: null }};
+        window._diffState = {{ cMap, pMap, ordered, prev, statusMap }};
     }}
 
     /* --- Side panel details --- */
+    const TAG_LABELS = {{ added: 'Added', removed: 'Removed', modified: 'Modified' }};
+    const TAG_CLASSES = {{ added: 'tag-added', removed: 'tag-removed', modified: 'tag-modified' }};
+
     window.showDetails = function(rowIdx, tr) {{
         setActiveRow(tr);
         const k = window._diffState.ordered[rowIdx];
         const c = window._diffState.cMap.get(k);
         const p = window._diffState.prev ? window._diffState.pMap.get(k) : null;
         const item = c || p;
+        const rowStatus = window._diffState.statusMap.get(k) || 'unchanged';
 
         let html = '';
+
+        // Status tag
+        if (rowStatus !== 'unchanged') {{
+            html += '<div class="detail-section">'
+                + '<span class="status-tag ' + TAG_CLASSES[rowStatus] + '">'
+                + TAG_LABELS[rowStatus] + '</span></div>';
+        }}
 
         // Note section
         const note = item[NOTE_FIELD];
