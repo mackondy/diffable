@@ -193,7 +193,13 @@ STYLE = """
 
         tbody tr:nth-child(even):not(.diff-added):not(.diff-removed):not(.diff-modified) { background-color: #fafafa; }
         tbody tr:hover:not(.diff-removed):not(.spacer-row) { background-color: #f0f0f5; }
-        tbody tr.active { background-color: #e8f0fe !important; }
+
+        tbody td.cell-active,
+        tbody th.cell-active {
+            outline: 2px solid #0071e3;
+            outline-offset: -2px;
+            border-radius: 2px;
+        }
 
         .diff-added { background-color: #e6ffed !important; }
         .diff-added:hover { background-color: #d2fbe0 !important; }
@@ -286,7 +292,7 @@ JS_TEMPLATE = Template("""
     const NOTE_FIELD = $NOTE_FIELD;
     const VERSIONS   = $VERSIONS;
 
-    let activeRow = null;
+    let activeCell = null;
     let changesOnly = true;
 
     /* --- Changes-only toggle --- */
@@ -328,15 +334,15 @@ JS_TEMPLATE = Template("""
     function closePanel() {
         document.getElementById('detail-panel').classList.remove('open');
         document.getElementById('main-content').classList.remove('panel-open');
-        if (activeRow) { activeRow.classList.remove('active'); activeRow = null; }
+        if (activeCell) { activeCell.classList.remove('cell-active'); activeCell = null; }
     }
     window.closePanel = closePanel;
 
-    function setActiveRow(tr) {
-        if (!tr || tr.classList.contains('diff-removed')) return;
-        if (activeRow) activeRow.classList.remove('active');
-        tr.classList.add('active');
-        activeRow = tr;
+    function setActiveCell(cell) {
+        if (!cell || cell.closest('tr').classList.contains('diff-removed')) return;
+        if (activeCell) activeCell.classList.remove('cell-active');
+        cell.classList.add('cell-active');
+        activeCell = cell;
     }
 
     /* --- Version dropdown --- */
@@ -507,10 +513,11 @@ JS_TEMPLATE = Template("""
                 const cellClick = status === 'removed'
                     ? ''
                     : ' onclick="showCellDetails(' + rowIdx + ',' + ci + ',this)"';
+                const dataAttrs = ' data-row="' + rowIdx + '" data-col="' + ci + '"';
                 if (ci === 0) {
-                    html += '<th' + cellClick + '>' + cell + '</th>';
+                    html += '<th' + dataAttrs + cellClick + '>' + cell + '</th>';
                 } else {
-                    html += '<td' + cellClick + '>' + cell + '</td>';
+                    html += '<td' + dataAttrs + cellClick + '>' + cell + '</td>';
                 }
             }
             html += '</tr>';
@@ -527,8 +534,7 @@ JS_TEMPLATE = Template("""
     const TAG_CLASSES = { added: 'tag-added', removed: 'tag-removed', modified: 'tag-modified' };
 
     window.showCellDetails = function(rowIdx, colIdx, cell) {
-        const tr = cell.closest('tr');
-        setActiveRow(tr);
+        setActiveCell(cell);
         const k = window._diffState.ordered[rowIdx];
         const c = window._diffState.cMap.get(k);
         const p = window._diffState.prev ? window._diffState.pMap.get(k) : null;
@@ -575,6 +581,43 @@ JS_TEMPLATE = Template("""
         document.getElementById('panel-body').innerHTML = html;
         openPanel();
     };
+
+    /* --- Keyboard navigation --- */
+    document.addEventListener('keydown', function(e) {
+        if (!activeCell) return;
+        const arrows = {ArrowUp: [-1,0], ArrowDown: [1,0], ArrowLeft: [0,-1], ArrowRight: [0,1]};
+        const dir = arrows[e.key];
+        if (!dir) return;
+        e.preventDefault();
+
+        const row = parseInt(activeCell.dataset.row);
+        const col = parseInt(activeCell.dataset.col);
+        const tbody = document.getElementById('table-body');
+        const allRows = Array.from(tbody.querySelectorAll('tr'));
+        const numCols = COLS.length;
+
+        let newRow = row + dir[0];
+        let newCol = col + dir[1];
+
+        // Clamp column
+        if (newCol < 0) newCol = 0;
+        if (newCol >= numCols) newCol = numCols - 1;
+
+        // Find next valid row (skip spacers and removed rows)
+        const maxIdx = allRows.length;
+        while (newRow >= 0 && newRow < maxIdx) {
+            const tr = allRows[newRow];
+            if (!tr.classList.contains('spacer-row') && !tr.classList.contains('diff-removed')) break;
+            newRow += dir[0] || 1; // if horizontal move landed on invalid, skip down
+        }
+        if (newRow < 0 || newRow >= maxIdx) return;
+
+        const target = tbody.querySelector('[data-row="' + newRow + '"][data-col="' + newCol + '"]');
+        if (target && target.onclick) {
+            target.click();
+            target.scrollIntoView({block: 'nearest'});
+        }
+    });
 
     // Initial render
     window.switchVersion(VERSIONS.length - 1);
