@@ -454,13 +454,6 @@ JS_TEMPLATE = Template("""
 
         let html = '';
 
-        // Status tag
-        if (rowStatus !== 'unchanged') {
-            html += '<div class="detail-section">'
-                + '<span class="status-tag ' + TAG_CLASSES[rowStatus] + '">'
-                + TAG_LABELS[rowStatus] + '</span></div>';
-        }
-
         // Note section
         const note = item[NOTE_FIELD];
         if (note) {
@@ -468,7 +461,14 @@ JS_TEMPLATE = Template("""
                 + '<div class="note-block">' + esc(note) + '</div></div>';
         }
 
-        document.getElementById('panel-title').innerText = 'Details';
+        // Panel header: status tag or plain "Details"
+        const panelTitle = document.getElementById('panel-title');
+        if (rowStatus !== 'unchanged') {
+            panelTitle.innerHTML = '<span class="status-tag ' + TAG_CLASSES[rowStatus] + '">'
+                + TAG_LABELS[rowStatus] + '</span>';
+        } else {
+            panelTitle.innerHTML = '<span class="status-tag" style="background:#f0f0f5;color:#86868b">No change</span>';
+        }
         document.getElementById('panel-body').innerHTML = html;
         openPanel();
     };
