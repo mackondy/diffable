@@ -277,7 +277,7 @@ STYLE = """
         td.cell-modified, th.cell-modified { background-color: #fff8c5 !important; }
         td.cell-modified:hover, th.cell-modified:hover { background-color: #fcf1a5 !important; }
 
-        .diff-old { color: #d73a49; text-decoration: line-through; margin-right: 6px; font-size: 0.9em; opacity: 0.8; }
+        .diff-old { color: #d73a49; margin-right: 6px; font-size: 0.9em; opacity: 0.8; }
         .diff-new { color: #22863a; font-weight: 600; }
         .diff-old .hi { background-color: #fdb8c0; border-radius: 2px; padding: 0 1px; }
         .diff-new .hi { background-color: #acf2bd; border-radius: 2px; padding: 0 1px; }
@@ -285,7 +285,7 @@ STYLE = """
         .diff-block { display: flex; flex-direction: column; gap: 8px; }
         .diff-line { padding: 6px 8px; border-radius: 4px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
         .diff-line-old { background-color: #ffeef0; color: #24292e; }
-        .diff-line-old .hi { background-color: #fdb8c0; border-radius: 2px; padding: 1px 2px; font-weight: 600; text-decoration: line-through; }
+        .diff-line-old .hi { background-color: #fdb8c0; border-radius: 2px; padding: 1px 2px; font-weight: 600; }
         .diff-line-new { background-color: #e6ffed; color: #24292e; }
         .diff-line-new .hi { background-color: #acf2bd; border-radius: 2px; padding: 1px 2px; font-weight: 600; }
         .diff-unified { padding: 6px 8px; border-radius: 4px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; background-color: #f8f8f8; color: #24292e; }
