@@ -282,6 +282,13 @@ STYLE = """
         .diff-old .hi { background-color: #fdb8c0; border-radius: 2px; padding: 0 1px; }
         .diff-new .hi { background-color: #acf2bd; border-radius: 2px; padding: 0 1px; }
 
+        .diff-block { display: flex; flex-direction: column; gap: 8px; }
+        .diff-line { padding: 6px 8px; border-radius: 4px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+        .diff-line-old { background-color: #ffeef0; color: #24292e; }
+        .diff-line-old .hi { background-color: #fdb8c0; border-radius: 2px; padding: 1px 2px; font-weight: 600; text-decoration: line-through; }
+        .diff-line-new { background-color: #e6ffed; color: #24292e; }
+        .diff-line-new .hi { background-color: #acf2bd; border-radius: 2px; padding: 1px 2px; font-weight: 600; }
+
         /* --- Side panel --- */
         .detail-panel {
             position: fixed;
@@ -626,7 +633,10 @@ JS_TEMPLATE = Template("""
         if (cellChanged) {
             const d = inlineDiff(pVal, cVal);
             html += '<div class="detail-section"><div class="detail-label">' + esc(colLabel) + '</div>'
-                + '<div class="detail-value"><span class="diff-old">' + d.oldHtml + '</span> <span class="diff-new">' + d.newHtml + '</span></div></div>';
+                + '<div class="detail-value"><div class="diff-block">'
+                + '<div class="diff-line diff-line-old">' + d.oldHtml + '</div>'
+                + '<div class="diff-line diff-line-new">' + d.newHtml + '</div>'
+                + '</div></div></div>';
         } else {
             const val = String(item[col] ?? '');
             if (val) {
