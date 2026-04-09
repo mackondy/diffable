@@ -487,6 +487,7 @@ JS_TEMPLATE = Template("""
         ops.reverse();
 
         let oldHtml = '', newHtml = '', unifiedHtml = '';
+        let hasInsert = false, hasDelete = false;
         for (const [op, oi, ni] of ops) {
             if (op === 'equal') {
                 const w = esc(oldWords[oi]);
@@ -494,15 +495,18 @@ JS_TEMPLATE = Template("""
                 newHtml += w;
                 unifiedHtml += w;
             } else if (op === 'delete') {
+                hasDelete = true;
                 oldHtml += '<span class="hi">' + esc(oldWords[oi]) + '</span>';
                 unifiedHtml += '<span class="hi-del">' + esc(oldWords[oi]) + '</span>';
             } else {
+                hasInsert = true;
                 newHtml += '<span class="hi">' + esc(newWords[ni]) + '</span>';
                 unifiedHtml += '<span class="hi-add">' + esc(newWords[ni]) + '</span>';
             }
         }
 
-        return { oldHtml, newHtml, unifiedHtml };
+        const mode = (hasInsert && hasDelete) ? 'split' : 'unified';
+        return { oldHtml, newHtml, unifiedHtml, mode };
     }
 
     /* --- Diff logic --- */
@@ -592,7 +596,9 @@ JS_TEMPLATE = Template("""
                 let cellCls = '';
                 if (status === 'modified' && c && p && String(c[col] ?? '') !== String(p[col] ?? '')) {
                     const d = inlineDiff(p[col], c[col]);
-                    cell = '<span class="diff-unified-inline">' + d.unifiedHtml + '</span>';
+                    cell = d.mode === 'unified'
+                        ? '<span class="diff-unified-inline">' + d.unifiedHtml + '</span>'
+                        : '<span class="diff-old">' + d.oldHtml + '</span><span class="diff-new">' + d.newHtml + '</span>';
                     cellCls = ' cell-modified';
                 } else {
                     cell = esc(item[col]);
@@ -639,8 +645,16 @@ JS_TEMPLATE = Template("""
 
         if (cellChanged) {
             const d = inlineDiff(pVal, cVal);
-            html += '<div class="detail-section"><div class="detail-label">' + esc(colLabel) + '</div>'
-                + '<div class="detail-value"><div class="diff-unified">' + d.unifiedHtml + '</div></div></div>';
+            if (d.mode === 'unified') {
+                html += '<div class="detail-section"><div class="detail-label">' + esc(colLabel) + '</div>'
+                    + '<div class="detail-value"><div class="diff-unified">' + d.unifiedHtml + '</div></div></div>';
+            } else {
+                html += '<div class="detail-section"><div class="detail-label">' + esc(colLabel) + '</div>'
+                    + '<div class="detail-value"><div class="diff-block">'
+                    + '<div class="diff-line diff-line-old">' + d.oldHtml + '</div>'
+                    + '<div class="diff-line diff-line-new">' + d.newHtml + '</div>'
+                    + '</div></div></div>';
+            }
         } else {
             const val = String(item[col] ?? '');
             if (val) {
