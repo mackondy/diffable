@@ -289,7 +289,7 @@ STYLE = """
         .diff-line-new { background-color: #e6ffed; color: #24292e; }
         .diff-line-new .hi { background-color: #acf2bd; border-radius: 2px; padding: 1px 2px; font-weight: 600; }
         .diff-unified { padding: 6px 8px; border-radius: 4px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; background-color: #f8f8f8; color: #24292e; }
-        .diff-unified .hi-del, .diff-unified-inline .hi-del { background-color: #fdb8c0; border-radius: 2px; padding: 1px 2px; color: #a40e26; }
+        .diff-unified .hi-del, .diff-unified-inline .hi-del { background-color: #fdb8c0; border-radius: 2px; padding: 1px 2px; color: #a40e26; text-decoration: line-through; }
         .diff-unified .hi-add, .diff-unified-inline .hi-add { background-color: #acf2bd; border-radius: 2px; padding: 1px 2px; font-weight: 600; color: #176f2c; }
 
         /* --- Side panel --- */
@@ -503,7 +503,8 @@ JS_TEMPLATE = Template("""
                 else if (op === 'delete') unifiedHtml += '<span class="hi-del">' + esc(a[oi]) + '</span>';
                 else unifiedHtml += '<span class="hi-add">' + esc(b[ni]) + '</span>';
             }
-            return { oldHtml: '', newHtml: '', unifiedHtml, mode: 'unified' };
+            const mode = charHasDelete ? 'unified-del' : 'unified-add';
+            return { oldHtml: '', newHtml: '', unifiedHtml, mode };
         }
 
         // Mixed changes: use word-level diff with split view
@@ -612,7 +613,7 @@ JS_TEMPLATE = Template("""
                 let cellCls = '';
                 if (status === 'modified' && c && p && String(c[col] ?? '') !== String(p[col] ?? '')) {
                     const d = inlineDiff(p[col], c[col]);
-                    cell = d.mode === 'unified'
+                    cell = d.mode.startsWith('unified')
                         ? '<span class="diff-unified-inline">' + d.unifiedHtml + '</span>'
                         : '<span class="diff-old">' + d.oldHtml + '</span><span class="diff-new">' + d.newHtml + '</span>';
                     cellCls = ' cell-modified';
@@ -661,7 +662,7 @@ JS_TEMPLATE = Template("""
 
         if (cellChanged) {
             const d = inlineDiff(pVal, cVal);
-            if (d.mode === 'unified') {
+            if (d.mode.startsWith('unified')) {
                 html += '<div class="detail-section"><div class="detail-label">' + esc(colLabel) + '</div>'
                     + '<div class="detail-value"><div class="diff-unified">' + d.unifiedHtml + '</div></div></div>';
             } else {
