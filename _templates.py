@@ -455,25 +455,19 @@ JS_TEMPLATE = Template("""
         return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
-    /* --- Inline word-level diff (like difflib.SequenceMatcher) --- */
-    function inlineDiff(oldStr, newStr) {
-        const oldWords = String(oldStr ?? '').split(/(\\s+)/);
-        const newWords = String(newStr ?? '').split(/(\\s+)/);
-
-        // LCS table for word sequences
-        const m = oldWords.length, n = newWords.length;
+    /* --- LCS diff on a token array, returns opcodes --- */
+    function lcsOps(oldToks, newToks) {
+        const m = oldToks.length, n = newToks.length;
         const dp = Array.from({length: m + 1}, () => new Uint16Array(n + 1));
         for (let i = 1; i <= m; i++)
             for (let j = 1; j <= n; j++)
-                dp[i][j] = oldWords[i-1] === newWords[j-1]
+                dp[i][j] = oldToks[i-1] === newToks[j-1]
                     ? dp[i-1][j-1] + 1
                     : Math.max(dp[i-1][j], dp[i][j-1]);
-
-        // Backtrack to get opcodes
         const ops = [];
         let i = m, j = n;
         while (i > 0 || j > 0) {
-            if (i > 0 && j > 0 && oldWords[i-1] === newWords[j-1]) {
+            if (i > 0 && j > 0 && oldToks[i-1] === newToks[j-1]) {
                 ops.push(['equal', i-1, j-1]);
                 i--; j--;
             } else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) {
@@ -485,28 +479,50 @@ JS_TEMPLATE = Template("""
             }
         }
         ops.reverse();
+        return ops;
+    }
 
-        let oldHtml = '', newHtml = '', unifiedHtml = '';
-        let hasInsert = false, hasDelete = false;
+    /* --- Inline diff: character-level for pure add/delete, word-level for mixed --- */
+    function inlineDiff(oldStr, newStr) {
+        const a = String(oldStr ?? ''), b = String(newStr ?? '');
+
+        // First pass: character-level to detect if add-only or delete-only
+        const charOps = lcsOps(a.split(''), b.split(''));
+        let charHasInsert = false, charHasDelete = false;
+        for (const [op] of charOps) {
+            if (op === 'delete') charHasDelete = true;
+            if (op === 'insert') charHasInsert = true;
+            if (charHasInsert && charHasDelete) break;
+        }
+
+        // Add-only or delete-only: use character-level diff with unified view
+        if (!(charHasInsert && charHasDelete)) {
+            let unifiedHtml = '';
+            for (const [op, oi, ni] of charOps) {
+                if (op === 'equal') unifiedHtml += esc(a[oi]);
+                else if (op === 'delete') unifiedHtml += '<span class="hi-del">' + esc(a[oi]) + '</span>';
+                else unifiedHtml += '<span class="hi-add">' + esc(b[ni]) + '</span>';
+            }
+            return { oldHtml: '', newHtml: '', unifiedHtml, mode: 'unified' };
+        }
+
+        // Mixed changes: use word-level diff with split view
+        const oldWords = a.split(/(\\s+)/);
+        const newWords = b.split(/(\\s+)/);
+        const ops = lcsOps(oldWords, newWords);
+        let oldHtml = '', newHtml = '';
         for (const [op, oi, ni] of ops) {
             if (op === 'equal') {
                 const w = esc(oldWords[oi]);
                 oldHtml += w;
                 newHtml += w;
-                unifiedHtml += w;
             } else if (op === 'delete') {
-                hasDelete = true;
                 oldHtml += '<span class="hi">' + esc(oldWords[oi]) + '</span>';
-                unifiedHtml += '<span class="hi-del">' + esc(oldWords[oi]) + '</span>';
             } else {
-                hasInsert = true;
                 newHtml += '<span class="hi">' + esc(newWords[ni]) + '</span>';
-                unifiedHtml += '<span class="hi-add">' + esc(newWords[ni]) + '</span>';
             }
         }
-
-        const mode = (hasInsert && hasDelete) ? 'split' : 'unified';
-        return { oldHtml, newHtml, unifiedHtml, mode };
+        return { oldHtml, newHtml, unifiedHtml: '', mode: 'split' };
     }
 
     /* --- Diff logic --- */
