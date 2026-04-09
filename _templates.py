@@ -288,6 +288,9 @@ STYLE = """
         .diff-line-old .hi { background-color: #fdb8c0; border-radius: 2px; padding: 1px 2px; font-weight: 600; text-decoration: line-through; }
         .diff-line-new { background-color: #e6ffed; color: #24292e; }
         .diff-line-new .hi { background-color: #acf2bd; border-radius: 2px; padding: 1px 2px; font-weight: 600; }
+        .diff-unified { padding: 6px 8px; border-radius: 4px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; background-color: #f8f8f8; color: #24292e; }
+        .diff-unified .hi-del, .diff-unified-inline .hi-del { background-color: #fdb8c0; border-radius: 2px; padding: 1px 2px; color: #a40e26; }
+        .diff-unified .hi-add, .diff-unified-inline .hi-add { background-color: #acf2bd; border-radius: 2px; padding: 1px 2px; font-weight: 600; color: #176f2c; }
 
         /* --- Side panel --- */
         .detail-panel {
@@ -483,19 +486,23 @@ JS_TEMPLATE = Template("""
         }
         ops.reverse();
 
-        let oldHtml = '', newHtml = '';
+        let oldHtml = '', newHtml = '', unifiedHtml = '';
         for (const [op, oi, ni] of ops) {
             if (op === 'equal') {
                 const w = esc(oldWords[oi]);
                 oldHtml += w;
                 newHtml += w;
+                unifiedHtml += w;
             } else if (op === 'delete') {
                 oldHtml += '<span class="hi">' + esc(oldWords[oi]) + '</span>';
+                unifiedHtml += '<span class="hi-del">' + esc(oldWords[oi]) + '</span>';
             } else {
                 newHtml += '<span class="hi">' + esc(newWords[ni]) + '</span>';
+                unifiedHtml += '<span class="hi-add">' + esc(newWords[ni]) + '</span>';
             }
         }
-        return { oldHtml, newHtml };
+
+        return { oldHtml, newHtml, unifiedHtml };
     }
 
     /* --- Diff logic --- */
@@ -585,7 +592,7 @@ JS_TEMPLATE = Template("""
                 let cellCls = '';
                 if (status === 'modified' && c && p && String(c[col] ?? '') !== String(p[col] ?? '')) {
                     const d = inlineDiff(p[col], c[col]);
-                    cell = '<span class="diff-old">' + d.oldHtml + '</span><span class="diff-new">' + d.newHtml + '</span>';
+                    cell = '<span class="diff-unified-inline">' + d.unifiedHtml + '</span>';
                     cellCls = ' cell-modified';
                 } else {
                     cell = esc(item[col]);
@@ -633,10 +640,7 @@ JS_TEMPLATE = Template("""
         if (cellChanged) {
             const d = inlineDiff(pVal, cVal);
             html += '<div class="detail-section"><div class="detail-label">' + esc(colLabel) + '</div>'
-                + '<div class="detail-value"><div class="diff-block">'
-                + '<div class="diff-line diff-line-old">' + d.oldHtml + '</div>'
-                + '<div class="diff-line diff-line-new">' + d.newHtml + '</div>'
-                + '</div></div></div>';
+                + '<div class="detail-value"><div class="diff-unified">' + d.unifiedHtml + '</div></div></div>';
         } else {
             const val = String(item[col] ?? '');
             if (val) {
