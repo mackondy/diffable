@@ -62,7 +62,8 @@ def _read_sheet_rows(ws):
         return []
     headers = [str(h) if h is not None else f"col_{i}"
                for i, h in enumerate(headers)]
-    rows = []
+
+    raw_rows = []
     for row in rows_iter:
         record = {}
         for h, val in zip(headers, row):
@@ -70,7 +71,17 @@ def _read_sheet_rows(ws):
                 record[h] = ""
             else:
                 record[h] = val if isinstance(val, (int, float, bool)) else str(val)
-        rows.append(record)
+        raw_rows.append(record)
+
+    # Remove empty columns (all values are empty after stripping)
+    non_empty_cols = [h for h in headers
+                      if any(str(r.get(h, "")).strip() for r in raw_rows)]
+    # Remove empty rows (all values are empty after stripping)
+    rows = []
+    for r in raw_rows:
+        if any(str(r.get(h, "")).strip() for h in non_empty_cols):
+            rows.append({h: r[h] for h in non_empty_cols})
+
     return rows
 
 
