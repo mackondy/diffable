@@ -31,7 +31,7 @@ import zipfile
 from html import escape as _html_escape
 from pathlib import Path
 
-from _templates import STYLE, JS_TEMPLATE, HTML_TEMPLATE
+from ._templates import STYLE, JS_TEMPLATE, HTML_TEMPLATE
 
 _META_KEYS = {"version", "date"}
 
@@ -442,11 +442,3 @@ class ZipDiff:
         )
 
 
-if __name__ == "__main__":
-    filepath = Path(__file__).parent / "eGPIO.json"
-    t = DiffTable(filepath, title="eGPIO Register Map", key="index")
-    out = t.generate()
-
-    filepath = Path(__file__).parent / "eRST.json"
-    t = DiffTable(filepath, title="eRST Register Map", key="index")
-    out = t.generate()

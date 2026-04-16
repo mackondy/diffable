@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "diffable"
+version = "0.1.0"
+description = "Interactive HTML diff viewer for versioned spreadsheet/JSON data"
+requires-python = ">=3.8"
+
+[project.optional-dependencies]
+xlsx = ["openpyxl"]
+
+[tool.setuptools.packages.find]
+include = ["diffable*"]

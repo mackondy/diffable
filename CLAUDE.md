@@ -4,10 +4,12 @@ Interactive HTML diff viewer for versioned spreadsheet/JSON data. Generates self
 
 ## Architecture
 
-Two Python files, no framework:
+A single package, no framework:
 
-- `diffable.py` — All Python logic: `DiffTable` (JSON→HTML), `SpreadsheetConverter` (xlsx/csv→JSON), `ExcelDiff` (batch directory pipeline)
-- `_templates.py` — `string.Template` constants: `STYLE` (CSS), `JS_TEMPLATE` (all client-side logic), `HTML_TEMPLATE` (page structure)
+- `diffable/core.py` — All Python logic: `DiffTable` (JSON→HTML), `SpreadsheetConverter` (xlsx/csv→JSON), `ExcelDiff` and `ZipDiff` (batch directory pipelines)
+- `diffable/_templates.py` — `string.Template` constants: `STYLE` (CSS), `JS_TEMPLATE` (all client-side logic), `HTML_TEMPLATE` (page structure)
+- `diffable/__init__.py` — public API re-exports
+- `diffable/__main__.py` — demo entry point for `python3 -m diffable`
 
 Output is a single self-contained HTML file (no external dependencies). All diff logic runs client-side in JavaScript embedded via the templates.
 
@@ -21,18 +23,19 @@ Output is a single self-contained HTML file (no external dependencies). All diff
 ## Running
 
 ```bash
-python3 diffable.py                    # generates HTML from eGPIO.json
+pip install -e .                       # editable install (add [xlsx] for openpyxl extra)
+python3 -m diffable                    # generates HTML from eGPIO.json / eRST.json in cwd
 python3 -c "from diffable import DiffTable; DiffTable('file.json', title='Title', key='id').generate()"
 ```
 
-Optional dependency: `openpyxl` (only needed for xlsx input).
+Optional dependency: `openpyxl` (only needed for xlsx input) — install via `pip install -e .[xlsx]`.
 
 ## Common tasks
 
-- **Modify diff rendering**: Edit `JS_TEMPLATE` in `_templates.py`, specifically `renderTable()` for table logic and `inlineDiff()` for word-level highlighting
-- **Change styling**: Edit `STYLE` in `_templates.py`
+- **Modify diff rendering**: Edit `JS_TEMPLATE` in `diffable/_templates.py`, specifically `renderTable()` for table logic and `inlineDiff()` for word-level highlighting
+- **Change styling**: Edit `STYLE` in `diffable/_templates.py`
 - **Change side panel behavior**: Edit `showDetails()` in `JS_TEMPLATE`
-- **Add new input formats**: Add methods to `SpreadsheetConverter` in `diffable.py`
+- **Add new input formats**: Add methods to `SpreadsheetConverter` in `diffable/core.py`
 
 ## Notes
 
