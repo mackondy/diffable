@@ -25,6 +25,9 @@ The "note" field, if present, is shown in the right-side detail panel.
 
 import csv
 import json
+import shutil
+import subprocess
+import zipfile
 from html import escape as _html_escape
 from pathlib import Path
 
@@ -41,6 +44,12 @@ def _esc(s):
 def _safe_name(name):
     """Sanitize a string for use as a filename."""
     return "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
+
+
+def _is_visible(zip_path):
+    """True if no path component is hidden (dot-prefixed) or a macOS metadata dir."""
+    parts = Path(zip_path).parts
+    return not any(p.startswith(".") or p == "__MACOSX" for p in parts)
 
 
 def _require_openpyxl():
@@ -346,6 +355,91 @@ class ExcelDiff:
             html_outputs.append(dt.generate())
 
         return html_outputs
+
+
+class ZipDiff:
+    """Build a git history from a folder of zip files for diffing.
+
+    Zip files are sorted by name and extracted in place: the git repo lives
+    inside ``zip_dir`` itself. The first zip seeds the initial commit; each
+    subsequent zip is extracted over the previous contents and committed,
+    producing a per-version history you can inspect with ``git log`` / ``git diff``.
+
+    The zip files themselves are gitignored so they don't appear in commits.
+    Any existing ``.git`` directory in ``zip_dir`` is wiped on each run.
+
+    Parameters
+    ----------
+    zip_dir : str or Path — folder containing .zip files; also the git work tree.
+    message_func : callable or None — ``(filepath) -> commit message``.
+        Defaults to the zip filename stem.
+    author_name : str — git author name used for commits.
+    author_email : str — git author email used for commits.
+    """
+
+    _PRESERVE = frozenset({".git", ".gitignore"})
+
+    def __init__(self, zip_dir, *, message_func=None,
+                 author_name="diffable", author_email="diffable@local"):
+        self.zip_dir = Path(zip_dir)
+        self.message_func = message_func or (lambda fp: fp.stem)
+        self.author_name = author_name
+        self.author_email = author_email
+
+    def run(self):
+        """Execute the pipeline. Returns the list of commit messages in order."""
+        zips = sorted(
+            (f for f in self.zip_dir.iterdir()
+             if f.is_file() and f.suffix.lower() == ".zip"),
+            key=lambda f: f.name,
+        )
+        if not zips:
+            raise FileNotFoundError(f"No .zip files found in {self.zip_dir}")
+
+        git_dir = self.zip_dir / ".git"
+        if git_dir.exists():
+            shutil.rmtree(git_dir)
+
+        self._git("init", "-b", "main")
+        self._git("config", "user.name", self.author_name)
+        self._git("config", "user.email", self.author_email)
+        (self.zip_dir / ".gitignore").write_text("*.zip\n")
+
+        commits = []
+        for zip_path in zips:
+            self._clear_tree()
+
+            with zipfile.ZipFile(zip_path) as zf:
+                visible = [n for n in zf.namelist() if _is_visible(n)]
+                zf.extractall(self.zip_dir, members=visible)
+
+            message = self.message_func(zip_path)
+            self._git("add", "-A")
+            self._git("commit", "--allow-empty", "-m", message)
+            commits.append(message)
+
+        return commits
+
+    def _clear_tree(self):
+        """Remove extracted files; preserve .git, .gitignore, and .zip files."""
+        for item in self.zip_dir.iterdir():
+            if item.name in self._PRESERVE:
+                continue
+            if item.is_file() and item.suffix.lower() == ".zip":
+                continue
+            if item.is_dir():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
+
+    def _git(self, *args):
+        subprocess.run(
+            ["git", *args],
+            cwd=self.zip_dir,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
 
 
 if __name__ == "__main__":
