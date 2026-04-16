@@ -431,11 +431,10 @@ class ZipDiff:
                 for entry in all_entries:
                     self._replace_entry(zf, entry, visible, zip_entries)
                     self._git("add", "-A", "--", entry)
-                    self._git("commit", "--allow-empty",
-                              "-m", f"{branch}: {entry}")
+                    self._git("commit", "--allow-empty", "-m", entry)
 
             if not all_entries:
-                self._git("commit", "--allow-empty", "-m", f"{branch}: no changes")
+                self._git("commit", "--allow-empty", "-m", "(no changes)")
 
             self._git("checkout", "main")
             merge_msg = self.message_func(zip_path)
