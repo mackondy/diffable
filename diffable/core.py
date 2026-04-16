@@ -358,12 +358,13 @@ class ExcelDiff:
 
 
 class ZipDiff:
-    """Build a git history from a folder of zip files for diffing.
+    """Build a branching git history from a folder of zip files.
 
-    Zip files are sorted by name and extracted in place: the git repo lives
-    inside ``zip_dir`` itself. The first zip seeds the initial commit; each
-    subsequent zip is extracted over the previous contents and committed,
-    producing a per-version history you can inspect with ``git log`` / ``git diff``.
+    The repo is initialized empty on ``main`` (just a ``.gitignore``). For each
+    zip (sorted by name), a branch is created; every top-level entry (subfolder
+    or file) in the zip becomes its own commit on the branch, then the branch
+    is merged back into ``main`` with ``--no-ff``. The result: a clean per-zip
+    merge history on ``main``, with per-subfolder granularity inside each branch.
 
     The zip files themselves are gitignored so they don't appear in commits.
     Any existing ``.git`` directory in ``zip_dir`` is wiped on each run.
@@ -371,23 +372,25 @@ class ZipDiff:
     Parameters
     ----------
     zip_dir : str or Path — folder containing .zip files; also the git work tree.
-    message_func : callable or None — ``(filepath) -> commit message``.
-        Defaults to the zip filename stem.
-    author_name : str — git author name used for commits.
-    author_email : str — git author email used for commits.
+    message_func : callable or None — ``(filepath) -> merge commit message``.
+        Defaults to the zip filename stem. Also used as the branch name.
+    author_name : str or None — override git author name. Defaults to your
+        global ``user.name`` from ``git config``.
+    author_email : str or None — override git author email. Defaults to your
+        global ``user.email`` from ``git config``.
     """
 
     _PRESERVE = frozenset({".git", ".gitignore"})
 
     def __init__(self, zip_dir, *, message_func=None,
-                 author_name="diffable", author_email="diffable@local"):
+                 author_name=None, author_email=None):
         self.zip_dir = Path(zip_dir)
         self.message_func = message_func or (lambda fp: fp.stem)
         self.author_name = author_name
         self.author_email = author_email
 
     def run(self):
-        """Execute the pipeline. Returns the list of commit messages in order."""
+        """Execute the pipeline. Returns the list of merge commit messages in order."""
         zips = sorted(
             (f for f in self.zip_dir.iterdir()
              if f.is_file() and f.suffix.lower() == ".zip"),
@@ -399,26 +402,61 @@ class ZipDiff:
         git_dir = self.zip_dir / ".git"
         if git_dir.exists():
             shutil.rmtree(git_dir)
+        self._clear_tree()
 
         self._git("init", "-b", "main")
-        self._git("config", "user.name", self.author_name)
-        self._git("config", "user.email", self.author_email)
+        if self.author_name:
+            self._git("config", "user.name", self.author_name)
+        if self.author_email:
+            self._git("config", "user.email", self.author_email)
         (self.zip_dir / ".gitignore").write_text("*.zip\n")
+        self._git("add", ".gitignore")
+        self._git("commit", "-m", "Initial commit")
 
-        commits = []
+        merges = []
         for zip_path in zips:
-            self._clear_tree()
+            branch = zip_path.stem
+            self._git("checkout", "-b", branch)
 
             with zipfile.ZipFile(zip_path) as zf:
                 visible = [n for n in zf.namelist() if _is_visible(n)]
-                zf.extractall(self.zip_dir, members=visible)
+                zip_entries = {Path(n).parts[0] for n in visible if Path(n).parts}
+                current_entries = {
+                    p.name for p in self.zip_dir.iterdir()
+                    if p.name not in self._PRESERVE
+                    and not (p.is_file() and p.suffix.lower() == ".zip")
+                }
+                all_entries = sorted(current_entries | zip_entries)
 
-            message = self.message_func(zip_path)
-            self._git("add", "-A")
-            self._git("commit", "--allow-empty", "-m", message)
-            commits.append(message)
+                for entry in all_entries:
+                    self._replace_entry(zf, entry, visible, zip_entries)
+                    self._git("add", "-A", "--", entry)
+                    self._git("commit", "--allow-empty",
+                              "-m", f"{branch}: {entry}")
 
-        return commits
+            if not all_entries:
+                self._git("commit", "--allow-empty", "-m", f"{branch}: no changes")
+
+            self._git("checkout", "main")
+            merge_msg = self.message_func(zip_path)
+            self._git("merge", "--no-ff", branch, "-m", merge_msg)
+            merges.append(merge_msg)
+
+        return merges
+
+    def _replace_entry(self, zf, entry, visible, zip_entries):
+        """Wipe a top-level entry from the work tree and re-extract it from the zip."""
+        entry_path = self.zip_dir / entry
+        if entry_path.exists():
+            if entry_path.is_dir():
+                shutil.rmtree(entry_path)
+            else:
+                entry_path.unlink()
+        if entry in zip_entries:
+            members = [n for n in visible
+                       if n == entry or n == entry + "/"
+                       or n.startswith(entry + "/")]
+            zf.extractall(self.zip_dir, members=members)
 
     def _clear_tree(self):
         """Remove extracted files; preserve .git, .gitignore, and .zip files."""
