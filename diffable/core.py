@@ -376,37 +376,40 @@ class ExcelDiff:
 class ZipDiff:
     """Build a branching git history from a folder of zip files.
 
-    The repo is initialized empty on ``main`` (just a ``.gitignore``). For each
-    zip (sorted by name), a branch is created; every top-level entry (subfolder
-    or file) in the zip becomes its own commit on the branch, then the branch
-    is merged back into ``main`` with ``--no-ff``. The result: a clean per-zip
-    merge history on ``main``, with per-subfolder granularity inside each branch.
+    Creates a dedicated ``work_dir`` (default ``zip_dir/Diff``) and extracts
+    every zip into it; the git repo lives inside ``work_dir``. The original
+    zip files in ``zip_dir`` are never touched. ``work_dir`` is wiped and
+    recreated on each run, so reruns are safe and idempotent.
 
-    The zip files themselves are gitignored so they don't appear in commits.
-    Any existing ``.git`` directory in ``zip_dir`` is wiped on each run.
+    Workflow: the repo starts with an empty ``main``. For each zip (sorted
+    by name), a branch is created; every top-level entry (subfolder or file)
+    in the zip becomes its own commit on the branch (skipping entries that
+    didn't change), then the branch is merged back into ``main`` with
+    ``--no-ff``. The result: a clean per-zip merge history on ``main``, with
+    per-subfolder granularity inside each branch.
 
     Parameters
     ----------
-    zip_dir : str or Path — folder containing .zip files; also the git work tree.
+    zip_dir : str or Path — folder containing .zip files (read-only input).
+    work_dir : str or Path — where files are unzipped and the git repo lives.
+        If relative, resolved against ``zip_dir``. Default ``"Diff"``.
     message_func : callable or None — ``(filepath) -> merge commit message``.
         Defaults to the zip filename stem.
     branch_func : callable or None — ``(filepath) -> branch name``.
         Default splits the filename stem on ``_`` and returns the first token
         that strictly matches a version tag like ``v1.00`` or ``v1.0.2``
         (regex ``v\\d+(\\.\\d+)+``), falling back to the full stem if none match.
-        Return value must be a valid git branch name (no spaces, no
-        ``~^:?*[\\`` or control characters).
     author_name : str or None — override git author name. Defaults to your
         global ``user.name`` from ``git config``.
     author_email : str or None — override git author email. Defaults to your
         global ``user.email`` from ``git config``.
     """
 
-    _PRESERVE = frozenset({".git", ".gitignore"})
-
-    def __init__(self, zip_dir, *, message_func=None, branch_func=None,
-                 author_name=None, author_email=None):
+    def __init__(self, zip_dir, *, work_dir="Diff", message_func=None,
+                 branch_func=None, author_name=None, author_email=None):
         self.zip_dir = Path(zip_dir)
+        work = Path(work_dir)
+        self.work_dir = work if work.is_absolute() else self.zip_dir / work
         self.message_func = message_func or (lambda fp: fp.stem)
         self.branch_func = branch_func or _default_branch_func
         self.author_name = author_name
@@ -422,32 +425,30 @@ class ZipDiff:
         if not zips:
             raise FileNotFoundError(f"No .zip files found in {self.zip_dir}")
 
-        git_dir = self.zip_dir / ".git"
-        if git_dir.exists():
-            shutil.rmtree(git_dir)
-        self._clear_tree()
+        if self.work_dir.exists():
+            shutil.rmtree(self.work_dir)
+        self.work_dir.mkdir(parents=True)
 
         self._git("init", "-b", "main")
         if self.author_name:
             self._git("config", "user.name", self.author_name)
         if self.author_email:
             self._git("config", "user.email", self.author_email)
-        (self.zip_dir / ".gitignore").write_text("*.zip\n")
-        self._git("add", ".gitignore")
-        self._git("commit", "-m", "Initial commit")
+        self._git("commit", "--allow-empty", "-m", "Initial commit")
 
         merges = []
         for zip_path in zips:
             branch = self.branch_func(zip_path)
-            self._git("checkout", "-b", branch)
+            if self._branch_exists(branch):
+                self._git("checkout", branch)
+            else:
+                self._git("checkout", "-b", branch)
 
             with zipfile.ZipFile(zip_path) as zf:
                 visible = [n for n in zf.namelist() if _is_visible(n)]
                 zip_entries = {Path(n).parts[0] for n in visible if Path(n).parts}
                 current_entries = {
-                    p.name for p in self.zip_dir.iterdir()
-                    if p.name not in self._PRESERVE
-                    and not (p.is_file() and p.suffix.lower() == ".zip")
+                    p.name for p in self.work_dir.iterdir() if p.name != ".git"
                 }
                 all_entries = sorted(current_entries | zip_entries)
 
@@ -471,7 +472,7 @@ class ZipDiff:
 
     def _replace_entry(self, zf, entry, visible, zip_entries):
         """Wipe a top-level entry from the work tree and re-extract it from the zip."""
-        entry_path = self.zip_dir / entry
+        entry_path = self.work_dir / entry
         if entry_path.exists():
             if entry_path.is_dir():
                 shutil.rmtree(entry_path)
@@ -481,32 +482,28 @@ class ZipDiff:
             members = [n for n in visible
                        if n == entry or n == entry + "/"
                        or n.startswith(entry + "/")]
-            zf.extractall(self.zip_dir, members=members)
+            zf.extractall(self.work_dir, members=members)
 
-    def _clear_tree(self):
-        """Remove extracted files; preserve .git, .gitignore, and .zip files."""
-        for item in self.zip_dir.iterdir():
-            if item.name in self._PRESERVE:
-                continue
-            if item.is_file() and item.suffix.lower() == ".zip":
-                continue
-            if item.is_dir():
-                shutil.rmtree(item)
-            else:
-                item.unlink()
+    def _branch_exists(self, branch):
+        """True if a local branch with this name already exists."""
+        result = subprocess.run(
+            ["git", "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"],
+            cwd=self.work_dir,
+        )
+        return result.returncode == 0
 
     def _has_staged_changes(self):
         """True if the index has any staged changes relative to HEAD."""
         result = subprocess.run(
             ["git", "diff", "--cached", "--quiet"],
-            cwd=self.zip_dir,
+            cwd=self.work_dir,
         )
         return result.returncode != 0
 
     def _git(self, *args):
         subprocess.run(
             ["git", *args],
-            cwd=self.zip_dir,
+            cwd=self.work_dir,
             check=True,
             capture_output=True,
             text=True,
