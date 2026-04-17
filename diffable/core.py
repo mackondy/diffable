@@ -438,8 +438,9 @@ class ZipDiff:
     zip_dir : str or Path — folder containing .zip files (read-only input).
     work_dir : str or Path — where files are unzipped and the git repo lives.
         If relative, resolved against ``zip_dir``. Default ``"Diff"``.
-    message_func : callable or None — ``(filepath) -> merge commit message``.
-        Defaults to the zip filename stem.
+    message_func : callable or None — ``(filepath) -> merge commit body``.
+        Defaults to the zip filename stem. The commit subject is always the
+        branch name; ``message_func`` provides the body paragraph that follows.
     branch_func : callable or None — ``(filepath) -> branch name``.
         Default picks the first ``_``-token matching ``v\\d+(\\.\\d+)+`` and
         falls back to the full stem if no version token is found. When several
@@ -510,9 +511,9 @@ class ZipDiff:
                 self._git("commit", "--allow-empty", "-m", "(no changes)")
 
             self._git("checkout", "main")
-            merge_msg = self.message_func(zip_path)
-            self._git("merge", "--no-ff", branch, "-m", merge_msg)
-            merges.append(merge_msg)
+            body = self.message_func(zip_path)
+            self._git("merge", "--no-ff", branch, "-m", branch, "-m", body)
+            merges.append(f"{branch}\n\n{body}")
 
         return merges
 
