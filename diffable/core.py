@@ -428,12 +428,15 @@ class ZipDiff:
                 }
                 all_entries = sorted(current_entries | zip_entries)
 
+                had_commit = False
                 for entry in all_entries:
                     self._replace_entry(zf, entry, visible, zip_entries)
                     self._git("add", "-A", "--", entry)
-                    self._git("commit", "--allow-empty", "-m", entry)
+                    if self._has_staged_changes():
+                        self._git("commit", "-m", entry)
+                        had_commit = True
 
-            if not all_entries:
+            if not had_commit:
                 self._git("commit", "--allow-empty", "-m", "(no changes)")
 
             self._git("checkout", "main")
@@ -468,6 +471,14 @@ class ZipDiff:
                 shutil.rmtree(item)
             else:
                 item.unlink()
+
+    def _has_staged_changes(self):
+        """True if the index has any staged changes relative to HEAD."""
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            cwd=self.zip_dir,
+        )
+        return result.returncode != 0
 
     def _git(self, *args):
         subprocess.run(
