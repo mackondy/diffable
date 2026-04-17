@@ -29,6 +29,7 @@ import re
 import shutil
 import subprocess
 import zipfile
+from collections import Counter
 from html import escape as _html_escape
 from pathlib import Path
 
@@ -92,10 +93,11 @@ _VERSION_RE = re.compile(r"v\d+(?:\.\d+)+")
 
 
 def _default_branch_func(filepath):
-    """Extract a version tag (e.g. ``v1.00``, ``v1.0.2``) from the filename stem.
+    """Extract a version tag from the filename stem.
 
-    Splits on ``_`` and returns the first token that is entirely a version
-    string. Falls back to the full stem if no version token is found.
+    Splits the stem on ``_`` and returns the first token that strictly matches
+    a version tag like ``v1.00`` or ``v1.0.2``. Falls back to the full stem if
+    no version token is found.
     """
     for token in filepath.stem.split("_"):
         if _VERSION_RE.fullmatch(token):
@@ -431,9 +433,11 @@ class ZipDiff:
     message_func : callable or None — ``(filepath) -> merge commit message``.
         Defaults to the zip filename stem.
     branch_func : callable or None — ``(filepath) -> branch name``.
-        Default splits the filename stem on ``_`` and returns the first token
-        that strictly matches a version tag like ``v1.00`` or ``v1.0.2``
-        (regex ``v\\d+(\\.\\d+)+``), falling back to the full stem if none match.
+        Default picks the first ``_``-token matching ``v\\d+(\\.\\d+)+`` and
+        falls back to the full stem if no version token is found. When several
+        zips yield the same raw name, every occurrence is patch-suffixed with
+        ``.0``, ``.1``, … in sort order (e.g. two ``v1.2`` zips become
+        ``v1.2.0`` and ``v1.2.1``).
     author_name : str or None — override git author name. Defaults to your
         global ``user.name`` from ``git config``.
     author_email : str or None — override git author email. Defaults to your
@@ -471,13 +475,11 @@ class ZipDiff:
             self._git("config", "user.email", self.author_email)
         self._git("commit", "--allow-empty", "-m", "Initial commit")
 
+        branches = self._resolve_branches(zips)
+
         merges = []
-        for zip_path in zips:
-            branch = self.branch_func(zip_path)
-            if self._branch_exists(branch):
-                self._git("checkout", branch)
-            else:
-                self._git("checkout", "-b", branch)
+        for zip_path, branch in zip(zips, branches):
+            self._git("checkout", "-b", branch)
 
             with zipfile.ZipFile(zip_path) as zf:
                 visible = [n for n in zf.namelist() if _is_visible(n)]
@@ -546,13 +548,24 @@ class ZipDiff:
                 with zf.open(m) as src, open(target, "wb") as dst:
                     shutil.copyfileobj(src, dst)
 
-    def _branch_exists(self, branch):
-        """True if a local branch with this name already exists."""
-        result = subprocess.run(
-            ["git", "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"],
-            cwd=self.work_dir,
-        )
-        return result.returncode == 0
+    def _resolve_branches(self, zips):
+        """Compute branch names for ``zips``, patch-suffixing duplicates.
+
+        Raw names shared by multiple zips become ``{name}.0``, ``{name}.1``, …
+        in zip sort order. Unique names are returned as-is.
+        """
+        raw = [self.branch_func(zp) for zp in zips]
+        counts = Counter(raw)
+        next_idx = {}
+        out = []
+        for name in raw:
+            if counts[name] > 1:
+                i = next_idx.get(name, 0)
+                next_idx[name] = i + 1
+                out.append(f"{name}.{i}")
+            else:
+                out.append(name)
+        return out
 
     def _has_staged_changes(self):
         """True if the index has any staged changes relative to HEAD."""
