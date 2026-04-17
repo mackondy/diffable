@@ -92,16 +92,24 @@ def _top_level_entries(visible, wrapper):
 _VERSION_RE = re.compile(r"v\d+(?:\.\d+)+")
 
 
+def _normalize_version(tag):
+    """Strip leading zeros from each numeric component (``v1.02`` -> ``v1.2``)."""
+    first, *rest = tag.split(".")
+    first = "v" + str(int(first[1:])) if first.startswith("v") else first
+    return ".".join([first, *(str(int(p)) for p in rest)])
+
+
 def _default_branch_func(filepath):
-    """Extract a version tag from the filename stem.
+    """Extract a normalized version tag from the filename stem.
 
     Splits the stem on ``_`` and returns the first token that strictly matches
-    a version tag like ``v1.00`` or ``v1.0.2``. Falls back to the full stem if
-    no version token is found.
+    a version tag like ``v1.00`` or ``v1.0.2``, with leading zeros stripped
+    from each component (``v1.02`` -> ``v1.2``, ``v1.02.0`` -> ``v1.2.0``).
+    Falls back to the full stem if no version token is found.
     """
     for token in filepath.stem.split("_"):
         if _VERSION_RE.fullmatch(token):
-            return token
+            return _normalize_version(token)
     return filepath.stem
 
 
