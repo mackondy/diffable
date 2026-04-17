@@ -53,6 +53,41 @@ def _is_visible(zip_path):
     return not any(p.startswith(".") or p == "__MACOSX" for p in parts)
 
 
+def _detect_wrapper(visible):
+    """If every visible member shares one top-level directory, return its name.
+
+    Returns ``None`` otherwise (multiple tops, or the sole top is a single file).
+    """
+    if not visible:
+        return None
+    tops = {Path(n).parts[0] for n in visible if Path(n).parts}
+    if len(tops) != 1:
+        return None
+    wrapper = next(iter(tops))
+    # Confirm the wrapper has children — otherwise it's a single top-level file.
+    has_children = any(
+        len(Path(n).parts) > 1 and Path(n).parts[0] == wrapper
+        for n in visible
+    )
+    return wrapper if has_children else None
+
+
+def _top_level_entries(visible, wrapper):
+    """Top-level entry names in the zip, relative to the wrapper if present."""
+    result = set()
+    for n in visible:
+        parts = Path(n).parts
+        if not parts:
+            continue
+        if wrapper:
+            if parts[0] != wrapper or len(parts) < 2:
+                continue
+            result.add(parts[1])
+        else:
+            result.add(parts[0])
+    return result
+
+
 _VERSION_RE = re.compile(r"v\d+(?:\.\d+)+")
 
 
@@ -446,7 +481,8 @@ class ZipDiff:
 
             with zipfile.ZipFile(zip_path) as zf:
                 visible = [n for n in zf.namelist() if _is_visible(n)]
-                zip_entries = {Path(n).parts[0] for n in visible if Path(n).parts}
+                wrapper = _detect_wrapper(visible)
+                zip_entries = _top_level_entries(visible, wrapper)
                 current_entries = {
                     p.name for p in self.work_dir.iterdir() if p.name != ".git"
                 }
@@ -454,7 +490,7 @@ class ZipDiff:
 
                 had_commit = False
                 for entry in all_entries:
-                    self._replace_entry(zf, entry, visible, zip_entries)
+                    self._replace_entry(zf, entry, visible, zip_entries, wrapper)
                     self._git("add", "-A", "--", entry)
                     if self._has_staged_changes():
                         self._git("commit", "-m", entry)
@@ -470,19 +506,45 @@ class ZipDiff:
 
         return merges
 
-    def _replace_entry(self, zf, entry, visible, zip_entries):
-        """Wipe a top-level entry from the work tree and re-extract it from the zip."""
+    def _replace_entry(self, zf, entry, visible, zip_entries, wrapper):
+        """Wipe a top-level entry from the work tree and re-extract it from the zip.
+
+        If the zip has a single top-level wrapper folder, its prefix is stripped
+        so the wrapper's children land directly in ``work_dir``.
+        """
         entry_path = self.work_dir / entry
         if entry_path.exists():
             if entry_path.is_dir():
                 shutil.rmtree(entry_path)
             else:
                 entry_path.unlink()
-        if entry in zip_entries:
-            members = [n for n in visible
-                       if n == entry or n == entry + "/"
-                       or n.startswith(entry + "/")]
+        if entry not in zip_entries:
+            return
+
+        prefix = f"{wrapper}/{entry}" if wrapper else entry
+        members = [n for n in visible
+                   if n == prefix or n == prefix + "/"
+                   or n.startswith(prefix + "/")]
+        if wrapper:
+            self._extract_stripped(zf, members, wrapper + "/")
+        else:
             zf.extractall(self.work_dir, members=members)
+
+    def _extract_stripped(self, zf, members, strip_prefix):
+        """Extract ``members`` from ``zf`` into ``work_dir``, stripping ``strip_prefix``."""
+        for m in members:
+            if not m.startswith(strip_prefix):
+                continue
+            rel = m[len(strip_prefix):]
+            if not rel:
+                continue
+            target = self.work_dir / rel
+            if m.endswith("/"):
+                target.mkdir(parents=True, exist_ok=True)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(m) as src, open(target, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
 
     def _branch_exists(self, branch):
         """True if a local branch with this name already exists."""
