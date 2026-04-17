@@ -37,6 +37,8 @@ from ._templates import STYLE, JS_TEMPLATE, HTML_TEMPLATE
 
 _META_KEYS = {"version", "date"}
 
+_GITIGNORE_SRC = Path(__file__).resolve().parent.parent / "docs" / "gitignore.txt"
+
 
 def _esc(s):
     """HTML-escape a string, returning '' for None."""
@@ -482,6 +484,9 @@ class ZipDiff:
             self._git("config", "user.name", self.author_name)
         if self.author_email:
             self._git("config", "user.email", self.author_email)
+        if _GITIGNORE_SRC.exists():
+            shutil.copy(_GITIGNORE_SRC, self.work_dir / ".gitignore")
+            self._git("add", ".gitignore")
         self._git("commit", "--allow-empty", "-m", "Initial commit")
 
         branches = self._resolve_branches(zips)
@@ -495,7 +500,8 @@ class ZipDiff:
                 wrapper = _detect_wrapper(visible)
                 zip_entries = _top_level_entries(visible, wrapper)
                 current_entries = {
-                    p.name for p in self.work_dir.iterdir() if p.name != ".git"
+                    p.name for p in self.work_dir.iterdir()
+                    if p.name not in (".git", ".gitignore")
                 }
                 all_entries = sorted(current_entries | zip_entries)
 
