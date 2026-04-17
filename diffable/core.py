@@ -439,7 +439,7 @@ class ZipDiff:
     ----------
     zip_dir : str or Path — folder containing .zip files (read-only input).
     work_dir : str or Path — where files are unzipped and the git repo lives.
-        If relative, resolved against ``zip_dir``. Default ``"Diff"``.
+        If relative, resolved against ``zip_dir``. Default ``"var"``.
     message_func : callable or None — ``(filepath) -> merge commit body``.
         Defaults to the zip filename stem. The commit subject is always the
         branch name; ``message_func`` provides the body paragraph that follows.
@@ -455,7 +455,7 @@ class ZipDiff:
         global ``user.email`` from ``git config``.
     """
 
-    def __init__(self, zip_dir, *, work_dir="Diff", message_func=None,
+    def __init__(self, zip_dir, *, work_dir="var", message_func=None,
                  branch_func=None, author_name=None, author_email=None):
         self.zip_dir = Path(zip_dir)
         work = Path(work_dir)
