@@ -25,6 +25,7 @@ The "note" field, if present, is shown in the right-side detail panel.
 
 import csv
 import json
+import re
 import shutil
 import subprocess
 import zipfile
@@ -50,6 +51,21 @@ def _is_visible(zip_path):
     """True if no path component is hidden (dot-prefixed) or a macOS metadata dir."""
     parts = Path(zip_path).parts
     return not any(p.startswith(".") or p == "__MACOSX" for p in parts)
+
+
+_VERSION_RE = re.compile(r"v\d+(?:\.\d+)+")
+
+
+def _default_branch_func(filepath):
+    """Extract a version tag (e.g. ``v1.00``, ``v1.0.2``) from the filename stem.
+
+    Splits on ``_`` and returns the first token that is entirely a version
+    string. Falls back to the full stem if no version token is found.
+    """
+    for token in filepath.stem.split("_"):
+        if _VERSION_RE.fullmatch(token):
+            return token
+    return filepath.stem
 
 
 def _require_openpyxl():
@@ -373,7 +389,13 @@ class ZipDiff:
     ----------
     zip_dir : str or Path — folder containing .zip files; also the git work tree.
     message_func : callable or None — ``(filepath) -> merge commit message``.
-        Defaults to the zip filename stem. Also used as the branch name.
+        Defaults to the zip filename stem.
+    branch_func : callable or None — ``(filepath) -> branch name``.
+        Default splits the filename stem on ``_`` and returns the first token
+        that strictly matches a version tag like ``v1.00`` or ``v1.0.2``
+        (regex ``v\\d+(\\.\\d+)+``), falling back to the full stem if none match.
+        Return value must be a valid git branch name (no spaces, no
+        ``~^:?*[\\`` or control characters).
     author_name : str or None — override git author name. Defaults to your
         global ``user.name`` from ``git config``.
     author_email : str or None — override git author email. Defaults to your
@@ -382,10 +404,11 @@ class ZipDiff:
 
     _PRESERVE = frozenset({".git", ".gitignore"})
 
-    def __init__(self, zip_dir, *, message_func=None,
+    def __init__(self, zip_dir, *, message_func=None, branch_func=None,
                  author_name=None, author_email=None):
         self.zip_dir = Path(zip_dir)
         self.message_func = message_func or (lambda fp: fp.stem)
+        self.branch_func = branch_func or _default_branch_func
         self.author_name = author_name
         self.author_email = author_email
 
@@ -415,7 +438,7 @@ class ZipDiff:
 
         merges = []
         for zip_path in zips:
-            branch = zip_path.stem
+            branch = self.branch_func(zip_path)
             self._git("checkout", "-b", branch)
 
             with zipfile.ZipFile(zip_path) as zf:
