@@ -358,6 +358,135 @@ STYLE = """
         }
         .placeholder-icon { font-size: 48px; margin-bottom: 12px; }
         .placeholder-text { font-size: 15px; color: #86868b; }
+
+        /* --- Time Machine timeline rail ---
+           Vertical strip of ticks, one per version, positioned by
+           timestamp via a hybrid temporal+uniform mapping. Hidden on
+           narrow screens and when fewer than two versions carry dates. */
+        .timeline-rail {
+            width: 82px;
+            flex-shrink: 0;
+            align-self: flex-start;
+            height: 100vh;
+            padding: 48px 0;
+            --tl-label-bg: #f5f5f7;
+        }
+
+        .timeline-rail-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        .tl-line {
+            position: absolute;
+            left: 10px;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: linear-gradient(180deg,
+                transparent 0%,
+                #d2d2d7 10%,
+                #d2d2d7 90%,
+                transparent 100%);
+            pointer-events: none;
+        }
+
+        /* Labels render to the LEFT of the stub (into the content area)
+           so long version strings don't clip against the viewport edge. */
+        .tl-tick {
+            position: absolute;
+            right: 0;
+            display: flex;
+            flex-direction: row-reverse;
+            align-items: center;
+            height: 16px;
+            transform: translateY(-50%);
+            cursor: pointer;
+            padding-left: 4px;
+            z-index: 2;
+            --tl-prox: 0;
+        }
+
+        .tl-tick::before {
+            content: '';
+            display: block;
+            width: calc(8px + var(--tl-prox) * 20px);
+            height: calc(1px + var(--tl-prox) * 1.5px);
+            background: #b8b8c0;
+            margin-left: 6px;
+            margin-right: 6px;
+            flex-shrink: 0;
+            transition: background 0.18s ease;
+        }
+
+        .tl-tick-label {
+            font-family: 'SF Mono', SFMono-Regular, Menlo, monospace;
+            font-size: calc(10.25px + var(--tl-prox) * 1.5px);
+            color: #86868b;
+            opacity: calc((var(--tl-prox) + var(--tl-prox) * var(--tl-prox)) / 2);
+            transform: translateX(calc(6px - var(--tl-prox) * 6px));
+            white-space: nowrap;
+            pointer-events: none;
+            background: var(--tl-label-bg);
+            padding: 1px 5px;
+            border-radius: 3px;
+            transition: color 0.18s ease;
+        }
+
+        .tl-tick:hover::before { background: #1d1d1f; }
+        .tl-tick:hover .tl-tick-label { color: #1d1d1f; }
+
+        .tl-tick.active::before {
+            width: 24px;
+            height: 2px;
+            background: #0071e3;
+        }
+        .tl-tick.active .tl-tick-label {
+            opacity: 1;
+            transform: translateX(0);
+            color: #0071e3;
+            font-weight: 600;
+        }
+
+        .tl-year {
+            position: absolute;
+            right: 22px;
+            transform: translateY(-50%);
+            text-align: right;
+            min-width: 34px;
+            font-size: 9px;
+            font-weight: 600;
+            letter-spacing: 0.6px;
+            color: #6e6e73;
+            text-transform: uppercase;
+            font-family: 'SF Mono', SFMono-Regular, Menlo, monospace;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .tl-month {
+            position: absolute;
+            right: 22px;
+            transform: translateY(-50%);
+            text-align: right;
+            min-width: 34px;
+            font-size: 8.5px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            color: #86868b;
+            text-transform: uppercase;
+            font-family: 'SF Mono', SFMono-Regular, Menlo, monospace;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .header-bar.rail-active .version-control { display: none; }
+
+        @media (max-width: 900px) {
+            .timeline-rail { display: none; }
+            .header-bar.rail-active .version-control { display: flex; }
+        }
 """
 
 JS_TEMPLATE = Template("""
@@ -443,6 +572,7 @@ JS_TEMPLATE = Template("""
         updateToggleState(vIdx);
         renderTable(vIdx);
         applyChangesFilter();
+        updateVersionTimelineActive(vIdx);
         const tbody = document.getElementById('table-body');
         tbody.classList.remove('fade-in');
         void tbody.offsetWidth;
@@ -736,6 +866,223 @@ JS_TEMPLATE = Template("""
         }
     });
 
+    /* --- Time Machine timeline rail --- */
+    const TL_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const TL_MONTH_LOOKUP = {
+        jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7,
+        sep:8, sept:8, oct:9, nov:10, dec:11,
+        january:0, february:1, march:2, april:3, june:5, july:6, august:7,
+        september:8, october:9, november:10, december:11
+    };
+
+    function parseTimelineDate(s) {
+        if (!s) return null;
+        const str = String(s).trim();
+        let m = str.match(/^(\\d{4})-(\\d{1,2})(?:-(\\d{1,2}))?/);
+        if (m) {
+            const y = parseInt(m[1], 10);
+            const mo = parseInt(m[2], 10) - 1;
+            const d = m[3] ? parseInt(m[3], 10) : 1;
+            return Math.floor(Date.UTC(y, mo, d) / 1000);
+        }
+        m = str.match(/^([A-Za-z]+)\\s+(\\d{4})$$/);
+        if (m) {
+            const mi = TL_MONTH_LOOKUP[m[1].toLowerCase()];
+            if (mi != null) return Math.floor(Date.UTC(parseInt(m[2], 10), mi, 1) / 1000);
+        }
+        const t = Date.parse(str);
+        if (!isNaN(t)) return Math.floor(t / 1000);
+        return null;
+    }
+
+    const TL_TEMPORAL_WEIGHT = 0.55;
+    const TL_MIN_TICKS = 2;
+
+    function buildVersionTimeline(rail, inner, ticks, onSelect) {
+        inner.innerHTML = '';
+        const positive = ticks.filter(t => t.ts && t.ts > 0).map(t => t.ts);
+        const anyTs = positive.length > 0;
+
+        if (ticks.length < TL_MIN_TICKS || !anyTs) {
+            rail.style.display = 'none';
+            return false;
+        }
+        rail.style.display = '';
+
+        const spine = document.createElement('div');
+        spine.className = 'tl-line';
+        inner.appendChild(spine);
+
+        const tsMin = Math.min.apply(null, positive);
+        const tsMax = Math.max.apply(null, positive);
+        const range = Math.max(1, tsMax - tsMin);
+        const n = ticks.length;
+
+        const SECS_PER_MONTH_APPROX = 30.44 * 86400;
+        const monthSpan = Math.max(1, Math.round(range / SECS_PER_MONTH_APPROX));
+        const idealH = 80 + n * 60 + monthSpan * 18;
+        rail.style.height = 'min(calc(100vh - 80px), ' + idealH + 'px)';
+
+        const order = ticks.map((t, i) => ({ i: i, t: t }))
+                           .sort((a, b) => (a.t.ts || 0) - (b.t.ts || 0));
+        const posFromTop = new Array(ticks.length);
+
+        order.forEach((entry, rank) => {
+            const t = entry.t;
+            const safeTs = t.ts || tsMin;
+            const temporalFromTop = (tsMax - safeTs) / range;
+            const uniformFromTop = (n - 1 - rank) / Math.max(1, n - 1);
+            const fromTop = TL_TEMPORAL_WEIGHT * temporalFromTop
+                          + (1 - TL_TEMPORAL_WEIGHT) * uniformFromTop;
+            posFromTop[entry.i] = fromTop;
+
+            const tick = document.createElement('div');
+            tick.className = 'tl-tick';
+            tick.dataset.idx = t.index;
+            tick.style.top = (fromTop * 100).toFixed(3) + '%';
+            tick.title = t.title || t.label;
+            tick.innerHTML = '<span class="tl-tick-label">' + esc(t.label) + '</span>';
+            tick.addEventListener('click', () => onSelect(t.index));
+            inner.appendChild(tick);
+        });
+
+        const MIN_LABEL_GAP = 0.04;
+        const occupied = posFromTop.slice();
+        const claim = (pos) => {
+            for (const p of occupied) {
+                if (p == null) continue;
+                if (Math.abs(p - pos) < MIN_LABEL_GAP) return false;
+            }
+            occupied.push(pos);
+            return true;
+        };
+
+        const SECS_PER_YEAR = 365.25 * 86400;
+        if (range > SECS_PER_YEAR * 0.5) {
+            const minYear = new Date(tsMin * 1000).getUTCFullYear();
+            const maxYear = new Date(tsMax * 1000).getUTCFullYear();
+            for (let y = minYear; y <= maxYear; y++) {
+                const yearStart = Date.UTC(y, 0, 1) / 1000;
+                if (yearStart < tsMin || yearStart > tsMax) continue;
+                const fromTop = (tsMax - yearStart) / range;
+                if (!claim(fromTop)) continue;
+                const mk = document.createElement('div');
+                mk.className = 'tl-year';
+                mk.textContent = y;
+                mk.style.top = (fromTop * 100).toFixed(3) + '%';
+                inner.appendChild(mk);
+            }
+        }
+
+        const SECS_PER_MONTH = SECS_PER_YEAR / 12;
+        if (range > SECS_PER_MONTH * 1.5) {
+            const SNAP_TOLERANCE = 0.05;
+            const dMin = new Date(tsMin * 1000);
+            const dMax = new Date(tsMax * 1000);
+            let curY = dMin.getUTCFullYear();
+            let curM = dMin.getUTCMonth();
+            const endY = dMax.getUTCFullYear();
+            const endM = dMax.getUTCMonth();
+            while (curY < endY || (curY === endY && curM <= endM)) {
+                if (curM !== 0) {
+                    const monthStart = Date.UTC(curY, curM, 1) / 1000;
+                    if (monthStart >= tsMin && monthStart <= tsMax) {
+                        const temporalFromTop = (tsMax - monthStart) / range;
+                        let snap = temporalFromTop;
+                        let bestDist = Infinity;
+                        for (let i = 0; i < posFromTop.length; i++) {
+                            const ft = posFromTop[i];
+                            if (ft == null) continue;
+                            const d = Math.abs(ft - temporalFromTop);
+                            if (d < bestDist) { bestDist = d; snap = ft; }
+                        }
+                        if (bestDist > SNAP_TOLERANCE) snap = temporalFromTop;
+                        if (claim(snap)) {
+                            const lbl = document.createElement('div');
+                            lbl.className = 'tl-month';
+                            lbl.textContent = TL_MONTHS[curM];
+                            lbl.style.top = (snap * 100).toFixed(3) + '%';
+                            inner.appendChild(lbl);
+                        }
+                    }
+                }
+                curM++;
+                if (curM > 11) { curM = 0; curY++; }
+            }
+        }
+
+        return true;
+    }
+
+    function updateVersionTimelineActive(idx) {
+        document.querySelectorAll('#timeline-inner .tl-tick').forEach(t => {
+            t.classList.toggle('active', parseInt(t.dataset.idx) === idx);
+        });
+    }
+
+    /* --- Dock-style magnifier --- */
+    const TL_MAGNIFIER_RADIUS = 110;
+    let _tlMagRafScheduled = false;
+    let _tlMagLastY = null;
+    function _tlApplyMagnifier() {
+        _tlMagRafScheduled = false;
+        const rail = document.getElementById('timeline-rail');
+        if (!rail) return;
+        const ticks = rail.querySelectorAll('.tl-tick');
+        if (_tlMagLastY == null) {
+            ticks.forEach(t => t.style.setProperty('--tl-prox', '0'));
+            return;
+        }
+        ticks.forEach(t => {
+            const r = t.getBoundingClientRect();
+            const y = r.top + r.height / 2;
+            const d = Math.abs(_tlMagLastY - y);
+            const lin = Math.max(0, 1 - d / TL_MAGNIFIER_RADIUS);
+            const prox = lin * lin * (3 - 2 * lin);
+            t.style.setProperty('--tl-prox', prox.toFixed(3));
+        });
+    }
+    function _tlScheduleMagnifier() {
+        if (_tlMagRafScheduled) return;
+        _tlMagRafScheduled = true;
+        requestAnimationFrame(_tlApplyMagnifier);
+    }
+    function _tlInstallMagnifier(rail) {
+        if (!rail || rail.dataset.tlMagInstalled === '1') return;
+        rail.dataset.tlMagInstalled = '1';
+        rail.addEventListener('mousemove', (e) => {
+            _tlMagLastY = e.clientY;
+            _tlScheduleMagnifier();
+        });
+        rail.addEventListener('mouseleave', () => {
+            _tlMagLastY = null;
+            _tlScheduleMagnifier();
+        });
+    }
+
+    /* --- Build the rail before the initial render so the active tick
+           lights up in the first paint. --- */
+    (function initTimeline() {
+        const rail = document.getElementById('timeline-rail');
+        const inner = document.getElementById('timeline-inner');
+        if (!rail || !inner) return;
+        const ticks = VERSIONS.map((v, i) => ({
+            index: i,
+            label: v.version,
+            ts: parseTimelineDate(v.date),
+            title: v.version + (v.date ? ' \u00b7 ' + v.date : '')
+        }));
+        const active = buildVersionTimeline(rail, inner, ticks, (idx) => {
+            vSelect.value = idx;
+            window.switchVersion(idx);
+        });
+        if (active) {
+            _tlInstallMagnifier(rail);
+            const headerBar = document.querySelector('.header-bar');
+            if (headerBar) headerBar.classList.add('rail-active');
+        }
+    })();
+
     // Initial render
     window.switchVersion(VERSIONS.length - 1);
 })();
@@ -776,6 +1123,10 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
         </table>
         </div>
     </div>
+
+    <aside class="timeline-rail" id="timeline-rail" aria-label="Revision timeline">
+        <div class="timeline-rail-inner" id="timeline-inner"></div>
+    </aside>
 
     <div class="detail-panel" id="detail-panel">
         <div class="panel-header">
