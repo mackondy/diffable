@@ -360,11 +360,15 @@ STYLE = """
         .placeholder-text { font-size: 15px; color: #86868b; }
 
         /* --- Time Machine timeline rail ---
-           Vertical strip of ticks, one per version, positioned by
-           timestamp via a hybrid temporal+uniform mapping. Hidden on
-           narrow screens and when fewer than two versions carry dates. */
+           Apple-style two-column rail: month/year labels left of the
+           central spine, version names right of the spine. Older at
+           top, newer at bottom. Always renders for any non-empty
+           timeline (>=1 versions). */
         .timeline-rail {
-            width: 82px;
+            /* Two label columns share the rail: months on the left
+               (right-aligned), version names on the right (after the
+               tick stub). 170px gives both columns enough room. */
+            width: 170px;
             flex-shrink: 0;
             align-self: flex-start;
             height: 100vh;
@@ -378,9 +382,11 @@ STYLE = """
             height: 100%;
         }
 
+        /* Soft vertical spine in a center column. Month labels sit to
+           its left, ticks/version names to its right. */
         .tl-line {
             position: absolute;
-            left: 10px;
+            left: 90px;
             top: 0;
             bottom: 0;
             width: 1px;
@@ -392,18 +398,17 @@ STYLE = """
             pointer-events: none;
         }
 
-        /* Labels render to the LEFT of the stub (into the content area)
-           so long version strings don't clip against the viewport edge. */
         .tl-tick {
             position: absolute;
-            right: 0;
+            /* Anchor each tick so its stub starts on the spine and
+               extends rightward toward the version label. */
+            left: 84px;
             display: flex;
-            flex-direction: row-reverse;
             align-items: center;
             height: 16px;
             transform: translateY(-50%);
             cursor: pointer;
-            padding-left: 4px;
+            padding-right: 4px;
             z-index: 2;
             --tl-prox: 0;
         }
@@ -422,16 +427,25 @@ STYLE = """
 
         .tl-tick-label {
             font-family: 'SF Mono', SFMono-Regular, Menlo, monospace;
+            /* Default visibility tracks magnifier proximity: non-major
+               labels are hidden at rest and fade in as the cursor
+               approaches. .tl-tick-major / .tl-tick.active pin opacity
+               so first/last/major-bumps and the active version stay
+               visible at all times. */
             font-size: calc(10.25px + var(--tl-prox) * 1.5px);
-            color: #86868b;
-            opacity: calc((var(--tl-prox) + var(--tl-prox) * var(--tl-prox)) / 2);
-            transform: translateX(calc(6px - var(--tl-prox) * 6px));
+            color: color-mix(in srgb, #86868b, #1d1d1f calc(var(--tl-prox) * 100%));
+            opacity: var(--tl-prox);
+            transform: translateX(calc(-6px + var(--tl-prox) * 6px));
             white-space: nowrap;
             pointer-events: none;
             background: var(--tl-label-bg);
             padding: 1px 5px;
             border-radius: 3px;
-            transition: color 0.18s ease;
+            transition: color 0.18s ease, opacity 0.18s ease;
+        }
+        .tl-tick-major .tl-tick-label {
+            opacity: 1;
+            transform: translateX(0);
         }
 
         .tl-tick:hover::before { background: #1d1d1f; }
@@ -449,36 +463,39 @@ STYLE = """
             font-weight: 600;
         }
 
-        .tl-year {
+        /* Month guideposts — Apple Time Machine convention. Title Case
+           ("August"), not all-caps; same size everywhere so the right
+           edge stays a clean column. .tl-month-anchor on first row,
+           year transitions, and last row bumps weight + colour so the
+           year reads as a section break. */
+        .tl-month {
             position: absolute;
-            right: 22px;
+            /* Right-aligned, ending ~10px before the spine at left:90.
+               Rail width 170 → right:90 puts the right edge at x=80. */
+            right: 90px;
             transform: translateY(-50%);
             text-align: right;
-            min-width: 34px;
-            font-size: 9px;
-            font-weight: 600;
-            letter-spacing: 0.6px;
-            color: #6e6e73;
-            text-transform: uppercase;
-            font-family: 'SF Mono', SFMono-Regular, Menlo, monospace;
+            font-size: 10px;
+            font-weight: 400;
+            letter-spacing: 0;
+            color: #9a9aa0;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
             pointer-events: none;
             white-space: nowrap;
         }
-
-        .tl-month {
-            position: absolute;
-            right: 22px;
-            transform: translateY(-50%);
-            text-align: right;
-            min-width: 34px;
-            font-size: 8.5px;
-            font-weight: 500;
-            letter-spacing: 0.5px;
-            color: #86868b;
-            text-transform: uppercase;
-            font-family: 'SF Mono', SFMono-Regular, Menlo, monospace;
-            pointer-events: none;
-            white-space: nowrap;
+        .tl-month-anchor {
+            font-weight: 600;
+            color: #6e6e73;
+        }
+        /* Clickable month labels jump to the version closest to that
+           month on the rail. Override the base pointer-events:none so
+           the click lands; hover darkens the ink to match .tl-tick:hover. */
+        .tl-month-link {
+            cursor: pointer;
+            pointer-events: auto;
+        }
+        .tl-month-link:hover {
+            color: #1d1d1f;
         }
 
         .header-bar.rail-active .version-control { display: none; }
@@ -868,6 +885,7 @@ JS_TEMPLATE = Template("""
 
     /* --- Time Machine timeline rail --- */
     const TL_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const TL_MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     const TL_MONTH_LOOKUP = {
         jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7,
         sep:8, sept:8, oct:9, nov:10, dec:11,
@@ -896,48 +914,99 @@ JS_TEMPLATE = Template("""
     }
 
     const TL_TEMPORAL_WEIGHT = 0.55;
-    const TL_MIN_TICKS = 2;
+    // The rail is the only revision selector when the dropdown is
+    // hidden (.header-bar.rail-active); render it whenever there's
+    // at least one tick. Hide only when there are zero.
+    const TL_MIN_TICKS = 1;
+
+    // Identify "major" versions whose labels stay visible at rest.
+    //   1. The first version overall is always major.
+    //   2. The last version overall is always major.
+    //   3. Every version that bumps the major number is major.
+    //   4. The very first .X0 version anywhere on the rail is major
+    //      (the "first decade" marker — v0.10 in a v0.01-started
+    //      timeline). Subsequent .X0s do not requalify.
+    // Returns a Set of pre-sort indices that are major.
+    function detectMajorIndices(items) {
+        const parsed = items
+            .map((it, i) => {
+                const m = String(it.label || '').match(/v?(\\d+)\\.(\\d+)/);
+                return m ? { i: i, ts: it.ts || 0, major: +m[1], minor: +m[2] } : null;
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.ts - b.ts);
+        const out = new Set();
+        if (!parsed.length) return out;
+        const lastIdx = parsed.length - 1;
+        let prevMajor = null;
+        let firstDecadeSeen = false;
+        parsed.forEach((p, idx) => {
+            const isFirst    = idx === 0;
+            const isLast     = idx === lastIdx;
+            const isMajorBmp = !isFirst && p.major !== prevMajor;
+            const isFirstDec = !firstDecadeSeen && p.minor !== 0 && p.minor % 10 === 0;
+            if (isFirst || isLast || isMajorBmp || isFirstDec) out.add(p.i);
+            if (p.minor !== 0 && p.minor % 10 === 0) firstDecadeSeen = true;
+            prevMajor = p.major;
+        });
+        return out;
+    }
 
     function buildVersionTimeline(rail, inner, ticks, onSelect) {
         inner.innerHTML = '';
-        const positive = ticks.filter(t => t.ts && t.ts > 0).map(t => t.ts);
-        const anyTs = positive.length > 0;
 
-        if (ticks.length < TL_MIN_TICKS || !anyTs) {
+        if (ticks.length < TL_MIN_TICKS) {
             rail.style.display = 'none';
             return false;
         }
         rail.style.display = '';
 
+        const positive = ticks.filter(t => t.ts && t.ts > 0).map(t => t.ts);
+        const anyTs = positive.length > 0;
+
         const spine = document.createElement('div');
         spine.className = 'tl-line';
         inner.appendChild(spine);
 
-        const tsMin = Math.min.apply(null, positive);
-        const tsMax = Math.max.apply(null, positive);
+        const tsMin = anyTs ? Math.min.apply(null, positive) : 0;
+        const tsMax = anyTs ? Math.max.apply(null, positive) : 1;
         const range = Math.max(1, tsMax - tsMin);
         const n = ticks.length;
 
         const SECS_PER_MONTH_APPROX = 30.44 * 86400;
-        const monthSpan = Math.max(1, Math.round(range / SECS_PER_MONTH_APPROX));
+        const monthSpan = anyTs ? Math.max(1, Math.round(range / SECS_PER_MONTH_APPROX)) : 1;
         const idealH = 80 + n * 60 + monthSpan * 18;
         rail.style.height = 'min(calc(100vh - 80px), ' + idealH + 'px)';
 
-        const order = ticks.map((t, i) => ({ i: i, t: t }))
-                           .sort((a, b) => (a.t.ts || 0) - (b.t.ts || 0));
+        // Order by time so uniform-spacing ranks reflect chronology.
+        // Without parseable timestamps, keep insertion order.
+        const order = anyTs
+            ? ticks.map((t, i) => ({ i: i, t: t })).sort((a, b) => (a.t.ts || 0) - (b.t.ts || 0))
+            : ticks.map((t, i) => ({ i: i, t: t }));
         const posFromTop = new Array(ticks.length);
+        const majorIdx   = detectMajorIndices(ticks.map(t => ({ label: t.label, ts: t.ts })));
 
         order.forEach((entry, rank) => {
             const t = entry.t;
-            const safeTs = t.ts || tsMin;
-            const temporalFromTop = (tsMax - safeTs) / range;
-            const uniformFromTop = (n - 1 - rank) / Math.max(1, n - 1);
-            const fromTop = TL_TEMPORAL_WEIGHT * temporalFromTop
-                          + (1 - TL_TEMPORAL_WEIGHT) * uniformFromTop;
+            let fromTop;
+            if (anyTs) {
+                const safeTs = t.ts || tsMin;
+                // Apple Time Machine convention: oldest at top
+                // (fromTop = 0), newest at bottom (fromTop = 1).
+                const temporalFromTop = (safeTs - tsMin) / range;
+                const uniformFromTop = rank / Math.max(1, n - 1);
+                fromTop = TL_TEMPORAL_WEIGHT * temporalFromTop
+                        + (1 - TL_TEMPORAL_WEIGHT) * uniformFromTop;
+            } else {
+                // No timestamps to interpolate against — pure uniform
+                // spacing in insertion order. Single-tick rails centre
+                // the lone dot so it isn't stranded at an edge.
+                fromTop = n > 1 ? rank / (n - 1) : 0.5;
+            }
             posFromTop[entry.i] = fromTop;
 
             const tick = document.createElement('div');
-            tick.className = 'tl-tick';
+            tick.className = 'tl-tick' + (majorIdx.has(entry.i) ? ' tl-tick-major' : '');
             tick.dataset.idx = t.index;
             tick.style.top = (fromTop * 100).toFixed(3) + '%';
             tick.title = t.title || t.label;
@@ -946,8 +1015,12 @@ JS_TEMPLATE = Template("""
             inner.appendChild(tick);
         });
 
+        // Year / month guideposts need real timestamps to map onto.
+        // Skip them on the uniform-spacing fallback (no anyTs).
+        if (!anyTs) return true;
+
         const MIN_LABEL_GAP = 0.04;
-        const occupied = posFromTop.slice();
+        const occupied = [];
         const claim = (pos) => {
             for (const p of occupied) {
                 if (p == null) continue;
@@ -957,58 +1030,79 @@ JS_TEMPLATE = Template("""
             return true;
         };
 
-        const SECS_PER_YEAR = 365.25 * 86400;
-        if (range > SECS_PER_YEAR * 0.5) {
-            const minYear = new Date(tsMin * 1000).getUTCFullYear();
-            const maxYear = new Date(tsMax * 1000).getUTCFullYear();
-            for (let y = minYear; y <= maxYear; y++) {
-                const yearStart = Date.UTC(y, 0, 1) / 1000;
-                if (yearStart < tsMin || yearStart > tsMax) continue;
-                const fromTop = (tsMax - yearStart) / range;
-                if (!claim(fromTop)) continue;
-                const mk = document.createElement('div');
-                mk.className = 'tl-year';
-                mk.textContent = y;
-                mk.style.top = (fromTop * 100).toFixed(3) + '%';
-                inner.appendChild(mk);
-            }
-        }
-
+        // Apple Time Machine label convention: one row per visible
+        // month, going chronologically. Year-bearing anchors mark the
+        // first label, every year transition, and the last label.
+        const SECS_PER_YEAR  = 365.25 * 86400;
         const SECS_PER_MONTH = SECS_PER_YEAR / 12;
         if (range > SECS_PER_MONTH * 1.5) {
             const SNAP_TOLERANCE = 0.05;
             const dMin = new Date(tsMin * 1000);
             const dMax = new Date(tsMax * 1000);
-            let curY = dMin.getUTCFullYear();
-            let curM = dMin.getUTCMonth();
-            const endY = dMax.getUTCFullYear();
-            const endM = dMax.getUTCMonth();
-            while (curY < endY || (curY === endY && curM <= endM)) {
-                if (curM !== 0) {
-                    const monthStart = Date.UTC(curY, curM, 1) / 1000;
-                    if (monthStart >= tsMin && monthStart <= tsMax) {
-                        const temporalFromTop = (tsMax - monthStart) / range;
-                        let snap = temporalFromTop;
-                        let bestDist = Infinity;
-                        for (let i = 0; i < posFromTop.length; i++) {
-                            const ft = posFromTop[i];
-                            if (ft == null) continue;
-                            const d = Math.abs(ft - temporalFromTop);
-                            if (d < bestDist) { bestDist = d; snap = ft; }
-                        }
-                        if (bestDist > SNAP_TOLERANCE) snap = temporalFromTop;
-                        if (claim(snap)) {
-                            const lbl = document.createElement('div');
-                            lbl.className = 'tl-month';
-                            lbl.textContent = TL_MONTHS[curM];
-                            lbl.style.top = (snap * 100).toFixed(3) + '%';
-                            inner.appendChild(lbl);
-                        }
+            const firstY = dMin.getUTCFullYear(), firstM = dMin.getUTCMonth();
+            const lastY  = dMax.getUTCFullYear(), lastM  = dMax.getUTCMonth();
+            const sameBoundary = firstY === lastY && firstM === lastM;
+            // Pass 1: collect candidate labels.
+            // Pin the first month at fromTop=0 (oldest version's row)
+            // and, when distinct, the last month at fromTop=1 (newest
+            // version's row) — the natural "monthStart >= tsMin" loop
+            // skips months whose 1st falls before tsMin (e.g. tsMin =
+            // June 27 → June 1 < tsMin → June dropped without the pin).
+            //
+            // Each label also carries the closest tick's array index
+            // (tickI) so pass 2 can wire a click handler that jumps
+            // to that version.
+            const firstTickI = order.length ? order[0].i : null;
+            const lastTickI  = order.length ? order[order.length - 1].i : null;
+            const labels = [{ year: firstY, month: firstM, snap: 0, tickI: firstTickI }];
+            claim(0);
+            if (!sameBoundary) claim(1);
+            // Natural intermediates — strictly between the two pins.
+            let curY = firstY;
+            let curM = firstM + 1;
+            if (curM > 11) { curM = 0; curY++; }
+            while (curY < lastY || (curY === lastY && curM < lastM)) {
+                const monthStart = Date.UTC(curY, curM, 1) / 1000;
+                if (monthStart >= tsMin && monthStart <= tsMax) {
+                    const temporalFromTop = (monthStart - tsMin) / range;
+                    let snap = temporalFromTop;
+                    let bestDist = Infinity;
+                    let bestI = null;
+                    for (let i = 0; i < posFromTop.length; i++) {
+                        const ft = posFromTop[i];
+                        if (ft == null) continue;
+                        const d = Math.abs(ft - temporalFromTop);
+                        if (d < bestDist) { bestDist = d; snap = ft; bestI = i; }
                     }
+                    if (bestDist > SNAP_TOLERANCE) snap = temporalFromTop;
+                    if (claim(snap)) labels.push({ year: curY, month: curM, snap: snap, tickI: bestI });
                 }
                 curM++;
                 if (curM > 11) { curM = 0; curY++; }
             }
+            if (!sameBoundary) labels.push({ year: lastY, month: lastM, snap: 1, tickI: lastTickI });
+            // Pass 2: render. First and last are always anchors (year-
+            // bearing). Year-transition rows are anchors too.
+            let lastYearShown = null;
+            labels.forEach((ml, idx) => {
+                const isBoundary = idx === 0 || idx === labels.length - 1;
+                const showYear   = isBoundary || lastYearShown !== ml.year;
+                lastYearShown    = ml.year;
+                const clickable  = ml.tickI != null;
+                const lbl = document.createElement('div');
+                lbl.className = (showYear ? 'tl-month tl-month-anchor' : 'tl-month')
+                              + (clickable ? ' tl-month-link' : '');
+                lbl.textContent = showYear
+                    ? TL_MONTHS_FULL[ml.month] + ' ' + ml.year
+                    : TL_MONTHS_FULL[ml.month];
+                lbl.style.top = (ml.snap * 100).toFixed(3) + '%';
+                if (clickable) {
+                    const target = ticks[ml.tickI];
+                    lbl.title = 'Jump to ' + (target.label || '');
+                    lbl.addEventListener('click', () => onSelect(target.index));
+                }
+                inner.appendChild(lbl);
+            });
         }
 
         return true;
