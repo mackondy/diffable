@@ -205,8 +205,12 @@ def _build_diff_only_versions(versions, data_key, key):
         {"status": "modified", "prev": {row}, "curr": {row}}
         {"status": "removed",  "prev": {row}}
 
-    The first version's diff_rows is empty (nothing to compare against).
-    Spacer rows are dropped — they represent unchanged layout.
+    The first version additionally carries a filtered data array under
+    ``data_key`` containing only rows whose keys appear in some diff
+    entry across the timeline — i.e. the baseline state of every record
+    that ever changes. Records identical across all versions are dropped
+    entirely, which is the whole point of changes_only mode. Spacer rows
+    are dropped too.
     """
     new_versions = []
     prev_rows_by_key = {}
@@ -249,15 +253,26 @@ def _build_diff_only_versions(versions, data_key, key):
         new_ver = {"version": ver["version"]}
         if "date" in ver:
             new_ver["date"] = ver["date"]
-        # The first version has no prior to diff against — keep its full
-        # rows under the data_key so the viewer can render it as a plain
-        # baseline snapshot. Subsequent versions only carry diff_rows.
-        if vi == 0:
-            new_ver[data_key] = list(rows)
         new_ver["diff_rows"] = diff_rows
         new_versions.append(new_ver)
 
         prev_rows_by_key = curr_rows_by_key
+
+    # Collect every key that appears anywhere in the diff timeline.
+    affected = set()
+    for nv in new_versions:
+        for dr in nv.get("diff_rows", []):
+            r = dr.get("curr") or dr.get("prev")
+            if r is None:
+                continue
+            k = r.get(key)
+            if k is not None and k != "":
+                affected.add(k)
+
+    # Baseline view for the first version: only rows whose key changed
+    # somewhere downstream. Original row order is preserved.
+    v0_rows = versions[0].get(data_key, []) if versions else []
+    new_versions[0][data_key] = [r for r in v0_rows if r.get(key) in affected]
 
     return new_versions
 
