@@ -293,6 +293,12 @@ STYLE = """
         .diff-unified .hi-del, .diff-unified-inline .hi-del { background-color: #fdb8c0; border-radius: 2px; padding: 1px 2px; color: #a40e26; text-decoration: line-through; }
         .diff-unified .hi-add, .diff-unified-inline .hi-add { background-color: #acf2bd; border-radius: 2px; padding: 1px 2px; font-weight: 600; color: #176f2c; }
 
+        /* Cell went from value → empty (or the reverse). No pill — a row
+           of saturated pills looks alarming when the diff is really
+           just "this cell was cleared". */
+        .diff-cleared { color: #a40e26; text-decoration: line-through; opacity: 0.65; }
+        .diff-filled  { color: #176f2c; font-weight: 500; }
+
         /* --- Side panel --- */
         .detail-panel {
             position: fixed;
@@ -627,6 +633,21 @@ JS_TEMPLATE = Template("""
     function inlineDiff(oldStr, newStr) {
         const a = String(oldStr ?? ''), b = String(newStr ?? '');
 
+        // Fast path: one side is empty. Render the non-empty side with
+        // muted strikethrough / muted green instead of a saturated pill —
+        // a row of pink "deleted" pills looks alarming when the diff is
+        // really "cell was just cleared".
+        if (a && !b) {
+            return { oldHtml: '', newHtml: '',
+                     unifiedHtml: '<span class="diff-cleared">' + esc(a) + '</span>',
+                     mode: 'unified-del' };
+        }
+        if (!a && b) {
+            return { oldHtml: '', newHtml: '',
+                     unifiedHtml: '<span class="diff-filled">' + esc(b) + '</span>',
+                     mode: 'unified-add' };
+        }
+
         // First pass: character-level to detect if add-only or delete-only
         const charOps = lcsOps(a.split(''), b.split(''));
         let charHasInsert = false, charHasDelete = false;
@@ -662,7 +683,36 @@ JS_TEMPLATE = Template("""
             return { oldHtml: '', newHtml: '', unifiedHtml, mode };
         }
 
-        // Mixed changes: use word-level diff with split view
+        // Identifier-like strings (no whitespace, e.g. SCH net names like
+        // CP10B_CMN0_REFCLK_DN vs CP10G_CMN0_REFCLK_DN) — word-level splits
+        // into a single token and would highlight the whole string. Reuse
+        // the char-level ops for finer-grained split view.
+        if (!/\\s/.test(a) && !/\\s/.test(b)) {
+            let oldHtml = '', newHtml = '';
+            let oldBuf = '', newBuf = '', bufOp = null;
+            const flushSplit = () => {
+                if (bufOp === 'equal') {
+                    oldHtml += esc(oldBuf);
+                    newHtml += esc(newBuf);
+                } else if (bufOp === 'delete') {
+                    oldHtml += '<span class="hi">' + esc(oldBuf) + '</span>';
+                } else if (bufOp === 'insert') {
+                    newHtml += '<span class="hi">' + esc(newBuf) + '</span>';
+                }
+                oldBuf = ''; newBuf = ''; bufOp = null;
+            };
+            for (const [op, oi, ni] of charOps) {
+                if (op !== bufOp) flushSplit();
+                bufOp = op;
+                if (op === 'equal') { oldBuf += a[oi]; newBuf += b[ni]; }
+                else if (op === 'delete') oldBuf += a[oi];
+                else newBuf += b[ni];
+            }
+            flushSplit();
+            return { oldHtml, newHtml, unifiedHtml: '', mode: 'split' };
+        }
+
+        // Mixed changes with whitespace (prose): word-level split view.
         const oldWords = a.split(/(\\s+)/);
         const newWords = b.split(/(\\s+)/);
         const ops = lcsOps(oldWords, newWords);
