@@ -274,8 +274,9 @@ STYLE = """
         .diff-removed { background-color: #ffeef0 !important; color: #a40e26 !important; cursor: not-allowed; }
         .diff-removed td, .diff-removed th { color: #a40e26 !important; text-decoration: line-through; background-color: #ffeef0 !important; }
 
-        td.cell-modified, th.cell-modified { background-color: #fff8c5 !important; }
-        td.cell-modified:hover, th.cell-modified:hover { background-color: #fcf1a5 !important; }
+        /* Modified cells rely on the inline old/new colours to signal the
+           change — adding a yellow background on top of red strikethrough +
+           green added text was three colours fighting for attention. */
 
         .diff-old { color: #d73a49; margin-right: 6px; font-size: 0.9em; opacity: 0.8; }
         .diff-new { color: #22863a; font-weight: 600; }
