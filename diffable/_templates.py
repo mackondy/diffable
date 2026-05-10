@@ -286,6 +286,15 @@ STYLE = """
            the layout from shifting. */
         .diff-modified th { box-shadow: inset 3px 0 0 0 #d4a72c; }
 
+        /* Cell-level gutter accent for dissimilar swaps — when the old
+           and new strings share so little structure that per-character
+           diff is meaningless, the renderer falls back to plain old + new
+           and paints this gutter so the swap still reads as a flagged
+           change at a glance. */
+        td.cell-dissimilar, th.cell-dissimilar {
+            box-shadow: inset 3px 0 0 0 #d4a72c;
+        }
+
         /* Modified cells rely on the inline old/new colours to signal the
            change — adding a yellow background on top of red strikethrough +
            green added text was three colours fighting for attention. */
@@ -663,13 +672,15 @@ JS_TEMPLATE = Template("""
                      mode: 'unified-add' };
         }
 
-        // First pass: character-level to detect if add-only or delete-only
+        // First pass: character-level diff. Track op presence and the
+        // length of the longest common subsequence (count of 'equal' ops),
+        // which we'll use as a similarity score below.
         const charOps = lcsOps(a.split(''), b.split(''));
-        let charHasInsert = false, charHasDelete = false;
+        let charHasInsert = false, charHasDelete = false, equalCount = 0;
         for (const [op] of charOps) {
             if (op === 'delete') charHasDelete = true;
-            if (op === 'insert') charHasInsert = true;
-            if (charHasInsert && charHasDelete) break;
+            else if (op === 'insert') charHasInsert = true;
+            else equalCount++;
         }
 
         // Add-only or delete-only: use character-level diff with unified view.
@@ -696,6 +707,20 @@ JS_TEMPLATE = Template("""
             flush();
             const mode = charHasDelete ? 'unified-del' : 'unified-add';
             return { oldHtml: '', newHtml: '', unifiedHtml, mode };
+        }
+
+        // Similarity gate: when the two strings barely overlap, char- or
+        // word-level diff finds spurious matches and renders as a sea of
+        // tiny pink/green pills (e.g. CLK_100M_NVME_SSD_1_REFCLKN vs
+        // CP10F_CMN0_REFCLK_DN — totally different nets, but they share
+        // letters like _, M, R, F, etc.). Below 70% LCS coverage, show
+        // the whole old + whole new with no inner highlighting and flag
+        // the result as dissimilar so the caller can paint a gutter
+        // accent on the cell.
+        const similarity = equalCount / Math.max(a.length, b.length);
+        if (similarity < 0.7) {
+            return { oldHtml: esc(a), newHtml: esc(b),
+                     unifiedHtml: '', mode: 'split', dissimilar: true };
         }
 
         // Identifier-like strings (no whitespace, e.g. SCH net names like
@@ -859,7 +884,11 @@ JS_TEMPLATE = Template("""
             let rowCls = '';
             if (status === 'added')    rowCls = 'diff-added';
             if (status === 'removed')  rowCls = 'diff-removed';
-            if (status === 'modified') rowCls = 'diff-modified';
+            // The 'modified' row accent only earns its keep when there are
+            // unchanged rows around it to contrast against. In changes_only
+            // mode every visible row is already a change, so the accent
+            // would be on every row — redundant noise.
+            if (status === 'modified' && !CHANGES_ONLY) rowCls = 'diff-modified';
 
             const rowIdx = ri;
 
@@ -876,6 +905,7 @@ JS_TEMPLATE = Template("""
                         ? '<span class="diff-unified-inline">' + d.unifiedHtml + '</span>'
                         : '<span class="diff-old">' + d.oldHtml + '</span><span class="diff-new">' + d.newHtml + '</span>';
                     cellCls = ' cell-modified';
+                    if (d.dissimilar) cellCls += ' cell-dissimilar';
                 } else {
                     cell = esc(item[col]);
                 }
