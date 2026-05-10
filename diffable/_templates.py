@@ -2,6 +2,12 @@
 
 from string import Template
 
+TOGGLE_PILL_HTML = """<div class="control-pill toggle-control">
+                    <label for="changes-toggle">Changes only</label>
+                    <button class="ios-toggle active" id="changes-toggle" onclick="toggleChangesOnly()" disabled aria-label="Show changes only"></button>
+                </div>
+                """
+
 STYLE = """
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -519,12 +525,13 @@ JS_TEMPLATE = Template("""
     const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
     document.body.classList.add(isMac ? 'os-mac' : 'os-win');
 
-    const KEY        = $KEY;
-    const DATA_KEY   = $DATA_KEY;
-    const COLS       = $COLS;
-    const COL_LABELS = $COL_LABELS;
-    const NOTE_FIELD = $NOTE_FIELD;
-    const VERSIONS   = $VERSIONS;
+    const KEY          = $KEY;
+    const DATA_KEY     = $DATA_KEY;
+    const COLS         = $COLS;
+    const COL_LABELS   = $COL_LABELS;
+    const NOTE_FIELD   = $NOTE_FIELD;
+    const VERSIONS     = $VERSIONS;
+    const CHANGES_ONLY = $CHANGES_ONLY;
 
     let activeCell = null;
     let changesOnly = true;
@@ -532,12 +539,14 @@ JS_TEMPLATE = Template("""
     /* --- Changes-only toggle --- */
     const changesToggle = document.getElementById('changes-toggle');
     window.toggleChangesOnly = function() {
+        if (!changesToggle) return;
         changesOnly = !changesOnly;
         changesToggle.classList.toggle('active', changesOnly);
         applyChangesFilter();
     };
 
     function updateToggleState(vIdx) {
+        if (!changesToggle) return;
         const hasPrev = vIdx > 0;
         changesToggle.disabled = !hasPrev;
         if (!hasPrev && changesOnly) {
@@ -731,12 +740,35 @@ JS_TEMPLATE = Template("""
         return { oldHtml, newHtml, unifiedHtml: '', mode: 'split' };
     }
 
+    /* --- Reshape precomputed diff_rows into cData/pData arrays so the
+           existing renderer logic below can run unchanged. Only used in
+           CHANGES_ONLY mode. --- */
+    function reshapeDiffRows(drs) {
+        const cData = [], pData = [];
+        for (const dr of drs) {
+            if (dr.status === 'added') {
+                cData.push(dr.curr);
+            } else if (dr.status === 'modified') {
+                cData.push(dr.curr);
+                pData.push(dr.prev);
+            } else if (dr.status === 'removed') {
+                pData.push(dr.prev);
+            }
+        }
+        return { cData, pData };
+    }
+
     /* --- Diff logic --- */
     function renderTable(vIdx) {
         const curr = VERSIONS[vIdx];
         const prev = vIdx > 0 ? VERSIONS[vIdx - 1] : null;
-        const cData = curr[DATA_KEY] || [];
-        const pData = prev ? (prev[DATA_KEY] || []) : [];
+        let cData, pData;
+        if (CHANGES_ONLY) {
+            ({ cData, pData } = reshapeDiffRows(curr.diff_rows || []));
+        } else {
+            cData = curr[DATA_KEY] || [];
+            pData = prev ? (prev[DATA_KEY] || []) : [];
+        }
 
         // Build maps using (key, occurrence) composite keys to handle duplicates
         function buildMap(data) {
@@ -1261,11 +1293,7 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
                 <p class="subtitle">Click any row for details. Switch versions to track changes.</p>
             </div>
             <div class="controls">
-                <div class="control-pill toggle-control">
-                    <label for="changes-toggle">Changes only</label>
-                    <button class="ios-toggle active" id="changes-toggle" onclick="toggleChangesOnly()" disabled aria-label="Show changes only"></button>
-                </div>
-                <div class="control-pill version-control">
+                $TOGGLE_PILL<div class="control-pill version-control">
                     <label for="v-select">Version</label>
                     <select id="v-select" class="version-select" onchange="switchVersion(this.value)"></select>
                 </div>

@@ -33,7 +33,7 @@ from collections import Counter
 from html import escape as _html_escape
 from pathlib import Path
 
-from ._templates import STYLE, JS_TEMPLATE, HTML_TEMPLATE
+from ._templates import STYLE, JS_TEMPLATE, HTML_TEMPLATE, TOGGLE_PILL_HTML
 
 _META_KEYS = {"version", "date"}
 
@@ -190,6 +190,73 @@ def _detect_columns(versions, data_key):
     return [k for k, _ in sorted(seen.items(), key=lambda x: x[1])]
 
 
+def _norm(v):
+    """Normalize a cell value for change detection — match the JS ``String(x ?? '')``."""
+    return "" if v is None else str(v)
+
+
+def _build_diff_only_versions(versions, data_key, key):
+    """Strip each version down to its changed rows vs the previous version.
+
+    Returns a list of versions where each entry has a ``diff_rows`` list
+    instead of the full data array. Each diff entry is one of::
+
+        {"status": "added",    "curr": {row}}
+        {"status": "modified", "prev": {row}, "curr": {row}}
+        {"status": "removed",  "prev": {row}}
+
+    The first version's diff_rows is empty (nothing to compare against).
+    Spacer rows are dropped — they represent unchanged layout.
+    """
+    new_versions = []
+    prev_rows_by_key = {}
+
+    for vi, ver in enumerate(versions):
+        rows = ver.get(data_key, [])
+
+        curr_rows_by_key = {}
+        order_keys = []
+        occ = {}
+        for r in rows:
+            k = r.get(key)
+            if k is None or k == "":
+                continue
+            occ[k] = occ.get(k, 0) + 1
+            ck = (k, occ[k])
+            curr_rows_by_key[ck] = r
+            order_keys.append(ck)
+
+        diff_rows = []
+        if vi > 0:
+            for ck in order_keys:
+                curr = curr_rows_by_key[ck]
+                prev = prev_rows_by_key.get(ck)
+                if prev is None:
+                    diff_rows.append({"status": "added", "curr": curr})
+                else:
+                    cols = set(prev) | set(curr)
+                    if any(_norm(prev.get(c)) != _norm(curr.get(c)) for c in cols):
+                        diff_rows.append({
+                            "status": "modified",
+                            "prev": prev,
+                            "curr": curr,
+                        })
+
+            for pk, prev in prev_rows_by_key.items():
+                if pk not in curr_rows_by_key:
+                    diff_rows.append({"status": "removed", "prev": prev})
+
+        new_ver = {"version": ver["version"]}
+        if "date" in ver:
+            new_ver["date"] = ver["date"]
+        new_ver["diff_rows"] = diff_rows
+        new_versions.append(new_ver)
+
+        prev_rows_by_key = curr_rows_by_key
+
+    return new_versions
+
+
 class DiffTable:
     """Generate an interactive, version-diffing HTML page.
 
@@ -204,10 +271,18 @@ class DiffTable:
         next to the source file, or in the current directory if ``source`` is a dict.
     columns : list[str] or None — explicit columns to display. Auto-detected if None.
     note_field : str — field shown in the side panel. Default "note".
+    changes_only : bool — if True, pre-compute per-version diffs in Python and
+        embed only changed rows in the output (added / modified / removed
+        relative to the previous version). The "Changes only" toggle is
+        omitted from the UI. The first version renders empty since it has
+        nothing to compare against. Trades baseline-view fidelity for a
+        much smaller, faster-loading HTML file when most rows are unchanged
+        across versions.
     """
 
     def __init__(self, source, *, title="Diff Explorer", key=None,
-                 output=None, columns=None, note_field="note"):
+                 output=None, columns=None, note_field="note",
+                 changes_only=True):
         if isinstance(source, dict):
             self.json_source = None
             self._data = source
@@ -219,6 +294,7 @@ class DiffTable:
         self._output = Path(output) if output else None
         self._columns = columns
         self.note_field = note_field
+        self.changes_only = changes_only
 
     @classmethod
     def from_files(cls, files, *, data_field=None, row_filter=None, **kwargs):
@@ -312,6 +388,9 @@ class DiffTable:
         return out_path
 
     def _render(self, versions, data_key, key, display_cols):
+        if self.changes_only:
+            versions = _build_diff_only_versions(versions, data_key, key)
+
         col_headers = "".join(
             f"<th>{self._col_label(c)}</th>" for c in display_cols
         )
@@ -323,12 +402,14 @@ class DiffTable:
             COL_LABELS=json.dumps(col_labels),
             NOTE_FIELD=json.dumps(self.note_field),
             VERSIONS=json.dumps(versions),
+            CHANGES_ONLY=json.dumps(self.changes_only),
         )
         return HTML_TEMPLATE.substitute(
             TITLE=_esc(self.title),
             STYLE=STYLE,
             COL_HEADERS=col_headers,
             SCRIPT=script,
+            TOGGLE_PILL="" if self.changes_only else TOGGLE_PILL_HTML,
         )
 
     @staticmethod
@@ -420,10 +501,12 @@ class ExcelDiff:
     note_field : str — field shown in the side panel. Default "note".
     version_func : callable or None — ``(filepath) -> (version_label, date | None)``.
     recent : int or None — only use the last N files (by name). None means all.
+    changes_only : bool — forwarded to :class:`DiffTable`. See its docstring.
     """
 
     def __init__(self, directory, *, output_dir=None, key=None, data_key="data",
-                 note_field="note", version_func=None, recent=None):
+                 note_field="note", version_func=None, recent=None,
+                 changes_only=True):
         self.directory = Path(directory)
         self.output_dir = Path(output_dir) if output_dir else self.directory
         self.key = key
@@ -431,6 +514,7 @@ class ExcelDiff:
         self.note_field = note_field
         self.version_func = version_func or (lambda fp: (fp.stem, None))
         self.recent = recent
+        self.changes_only = changes_only
 
     def run(self):
         """Execute the full pipeline: xlsx -> JSON -> HTML. Returns list[Path]."""
@@ -484,6 +568,7 @@ class ExcelDiff:
                 title=info["name"],
                 key=self.key,
                 note_field=self.note_field,
+                changes_only=self.changes_only,
             )
             html_outputs.append(dt.generate())
 
