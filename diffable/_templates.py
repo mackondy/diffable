@@ -1147,7 +1147,10 @@ JS_TEMPLATE = Template("""
         // first label, every year transition, and the last label.
         const SECS_PER_YEAR  = 365.25 * 86400;
         const SECS_PER_MONTH = SECS_PER_YEAR / 12;
-        if (range > SECS_PER_MONTH * 1.5) {
+        // Render time labels whenever there's any range. The sameBoundary
+        // branch below collapses to one label when both ticks share a
+        // month — small ranges get a single anchor instead of duplicates.
+        if (range > 0) {
             const SNAP_TOLERANCE = 0.05;
             const dMin = new Date(tsMin * 1000);
             const dMax = new Date(tsMax * 1000);

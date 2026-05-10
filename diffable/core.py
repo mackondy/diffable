@@ -302,7 +302,8 @@ class DiffTable:
         self.changes_only = changes_only
 
     @classmethod
-    def from_files(cls, files, *, data_field=None, row_filter=None, **kwargs):
+    def from_files(cls, files, *, data_field=None, date_field=None,
+                   row_filter=None, **kwargs):
         """Build a DiffTable from N separate JSON files, one version per file.
 
         Each ``files`` entry may be:
@@ -313,6 +314,12 @@ class DiffTable:
         Each file's JSON may be either a list (used directly as the data
         array) or a dict whose first list-valued top-level key holds the data
         array. Pass ``data_field`` to pin that key explicitly.
+
+        ``date_field`` names a top-level key in each source JSON whose value
+        is used as the version date when the entry tuple doesn't supply one
+        explicitly (e.g. ``date_field="timestamp"`` for files that embed
+        their own provenance metadata). Without a date the timeline rail
+        falls back to uniform spacing.
 
         ``row_filter`` is an optional callable applied to each row in every
         file; rows for which it returns falsy are dropped before the version
@@ -343,6 +350,8 @@ class DiffTable:
                 if resolved is None:
                     resolved = _detect_data_key(doc)
                 rows = doc.get(resolved, [])
+                if date is None and date_field:
+                    date = doc.get(date_field)
 
             if row_filter is not None:
                 rows = [r for r in rows if row_filter(r)]
