@@ -770,7 +770,15 @@ JS_TEMPLATE = Template("""
         const prev = vIdx > 0 ? VERSIONS[vIdx - 1] : null;
         let cData, pData;
         if (CHANGES_ONLY) {
-            ({ cData, pData } = reshapeDiffRows(curr.diff_rows || []));
+            if (vIdx === 0) {
+                // Earliest version: nothing to diff against. Render its full
+                // baseline data as a plain snapshot (the Python builder
+                // keeps the first version's rows under DATA_KEY for this).
+                cData = curr[DATA_KEY] || [];
+                pData = [];
+            } else {
+                ({ cData, pData } = reshapeDiffRows(curr.diff_rows || []));
+            }
         } else {
             cData = curr[DATA_KEY] || [];
             pData = prev ? (prev[DATA_KEY] || []) : [];
@@ -841,8 +849,11 @@ JS_TEMPLATE = Template("""
             statusMap.set(k, status);
 
             // Skip unchanged rows entirely when the filter is on — keeps
-            // the DOM small for huge tables (e.g. 3500-pin BGAs).
-            if (changesOnly && status === 'unchanged') continue;
+            // the DOM small for huge tables (e.g. 3500-pin BGAs). When
+            // there's no prior version (vIdx 0 / baseline view) every row
+            // is 'unchanged' by default; skipping them would empty the
+            // table, so render them as plain data instead.
+            if (changesOnly && status === 'unchanged' && prev) continue;
 
             const item = c || p;
             let rowCls = '';

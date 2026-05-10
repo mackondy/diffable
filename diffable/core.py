@@ -249,6 +249,11 @@ def _build_diff_only_versions(versions, data_key, key):
         new_ver = {"version": ver["version"]}
         if "date" in ver:
             new_ver["date"] = ver["date"]
+        # The first version has no prior to diff against — keep its full
+        # rows under the data_key so the viewer can render it as a plain
+        # baseline snapshot. Subsequent versions only carry diff_rows.
+        if vi == 0:
+            new_ver[data_key] = list(rows)
         new_ver["diff_rows"] = diff_rows
         new_versions.append(new_ver)
 
