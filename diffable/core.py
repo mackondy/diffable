@@ -191,30 +191,95 @@ def _detect_columns(versions, data_key):
 
 
 class DiffTable:
-    """Generate an interactive, version-diffing HTML page from a JSON file.
+    """Generate an interactive, version-diffing HTML page.
 
     Parameters
     ----------
-    json_source : str or Path — path to the JSON file.
+    source : str, Path, or dict — either a path to a versioned JSON file
+        (``{"versions": [...]}``) or a pre-built dict in the same shape.
+        Use :meth:`from_files` to build the dict from N separate JSON files.
     title : str — page/header title.
     key : str — field used to match rows across versions. Defaults to the first field.
-    output : str or Path or None — output HTML path. Defaults to ``<title>.html``.
+    output : str or Path or None — output HTML path. Defaults to ``<title>.html``
+        next to the source file, or in the current directory if ``source`` is a dict.
     columns : list[str] or None — explicit columns to display. Auto-detected if None.
     note_field : str — field shown in the side panel. Default "note".
     """
 
-    def __init__(self, json_source, *, title="Diff Explorer", key=None,
+    def __init__(self, source, *, title="Diff Explorer", key=None,
                  output=None, columns=None, note_field="note"):
-        self.json_source = Path(json_source)
+        if isinstance(source, dict):
+            self.json_source = None
+            self._data = source
+        else:
+            self.json_source = Path(source)
+            self._data = None
         self.title = title
         self._key = key
         self._output = Path(output) if output else None
         self._columns = columns
         self.note_field = note_field
 
+    @classmethod
+    def from_files(cls, files, *, data_field=None, row_filter=None, **kwargs):
+        """Build a DiffTable from N separate JSON files, one version per file.
+
+        Each ``files`` entry may be:
+          * a path/str — version label defaults to the file stem.
+          * ``(path, version)`` — explicit version label.
+          * ``(path, version, date)`` — version label and date string.
+
+        Each file's JSON may be either a list (used directly as the data
+        array) or a dict whose first list-valued top-level key holds the data
+        array. Pass ``data_field`` to pin that key explicitly.
+
+        ``row_filter`` is an optional callable applied to each row in every
+        file; rows for which it returns falsy are dropped before the version
+        entry is built. Useful for excluding categories of rows (e.g. high-
+        speed signal sections) without rewriting the source JSON files.
+
+        Returns a DiffTable bound to an in-memory ``{"versions": [...]}`` doc.
+        """
+        resolved = data_field
+        versions = []
+        for entry in files:
+            if isinstance(entry, (str, Path)):
+                path, version, date = Path(entry), Path(entry).stem, None
+            else:
+                items = list(entry)
+                path = Path(items[0])
+                version = items[1] if len(items) > 1 and items[1] else path.stem
+                date = items[2] if len(items) > 2 else None
+
+            with path.open("r", encoding="utf-8") as f:
+                doc = json.load(f)
+
+            if isinstance(doc, list):
+                rows = doc
+                if resolved is None:
+                    resolved = "data"
+            else:
+                if resolved is None:
+                    resolved = _detect_data_key(doc)
+                rows = doc.get(resolved, [])
+
+            if row_filter is not None:
+                rows = [r for r in rows if row_filter(r)]
+
+            ver = {"version": version}
+            if date:
+                ver["date"] = date
+            ver[resolved] = rows
+            versions.append(ver)
+
+        return cls({"versions": versions}, **kwargs)
+
     def generate(self):
-        with self.json_source.open("r", encoding="utf-8") as f:
-            data = json.load(f)
+        if self._data is not None:
+            data = self._data
+        else:
+            with self.json_source.open("r", encoding="utf-8") as f:
+                data = json.load(f)
 
         if "versions" not in data or not data["versions"]:
             raise ValueError("JSON must contain a non-empty 'versions' array.")
@@ -236,7 +301,12 @@ class DiffTable:
             display_cols.remove(key)
         display_cols.insert(0, key)
 
-        out_path = self._output or (self.json_source.parent / f"{self.title}.html")
+        if self._output:
+            out_path = self._output
+        elif self.json_source:
+            out_path = self.json_source.parent / f"{self.title}.html"
+        else:
+            out_path = Path.cwd() / f"{self.title}.html"
         html = self._render(versions, data_key, key, display_cols)
         out_path.write_text(html, encoding="utf-8")
         return out_path

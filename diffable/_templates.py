@@ -540,17 +540,11 @@ JS_TEMPLATE = Template("""
     }
 
     function applyChangesFilter() {
-        const rows = document.querySelectorAll('#table-body tr');
-        rows.forEach(tr => {
-            if (changesOnly) {
-                const isDiff = tr.classList.contains('diff-added')
-                    || tr.classList.contains('diff-removed')
-                    || tr.querySelector('.cell-modified');
-                tr.style.display = isDiff ? '' : 'none';
-            } else {
-                tr.style.display = '';
-            }
-        });
+        // Re-render rather than toggle display: when changesOnly is on we
+        // skip unchanged rows entirely in renderTable, so the DOM stays
+        // small. Toggling to off rebuilds the full table once.
+        const vIdx = parseInt(vSelect.value);
+        renderTable(vIdx);
     }
 
     /* --- Panel helpers --- */
@@ -588,7 +582,6 @@ JS_TEMPLATE = Template("""
         const vIdx = parseInt(idx);
         updateToggleState(vIdx);
         renderTable(vIdx);
-        applyChangesFilter();
         updateVersionTimelineActive(vIdx);
         const tbody = document.getElementById('table-body');
         tbody.classList.remove('fade-in');
@@ -642,14 +635,28 @@ JS_TEMPLATE = Template("""
             if (charHasInsert && charHasDelete) break;
         }
 
-        // Add-only or delete-only: use character-level diff with unified view
+        // Add-only or delete-only: use character-level diff with unified view.
+        // Merge consecutive same-op characters into a single span so a fully
+        // deleted/added word renders as one strikethrough block instead of
+        // a row of per-character pills (CSS padding makes those look ugly).
         if (!(charHasInsert && charHasDelete)) {
             let unifiedHtml = '';
+            let buf = '';
+            let bufOp = null;
+            const flush = () => {
+                if (!buf) return;
+                if (bufOp === 'equal') unifiedHtml += esc(buf);
+                else if (bufOp === 'delete') unifiedHtml += '<span class="hi-del">' + esc(buf) + '</span>';
+                else unifiedHtml += '<span class="hi-add">' + esc(buf) + '</span>';
+                buf = '';
+                bufOp = null;
+            };
             for (const [op, oi, ni] of charOps) {
-                if (op === 'equal') unifiedHtml += esc(a[oi]);
-                else if (op === 'delete') unifiedHtml += '<span class="hi-del">' + esc(a[oi]) + '</span>';
-                else unifiedHtml += '<span class="hi-add">' + esc(b[ni]) + '</span>';
+                if (op !== bufOp) flush();
+                bufOp = op;
+                buf += op === 'insert' ? b[ni] : a[oi];
             }
+            flush();
             const mode = charHasDelete ? 'unified-del' : 'unified-add';
             return { oldHtml: '', newHtml: '', unifiedHtml, mode };
         }
@@ -743,6 +750,10 @@ JS_TEMPLATE = Template("""
             }
 
             statusMap.set(k, status);
+
+            // Skip unchanged rows entirely when the filter is on — keeps
+            // the DOM small for huge tables (e.g. 3500-pin BGAs).
+            if (changesOnly && status === 'unchanged') continue;
 
             const item = c || p;
             let rowCls = '';
