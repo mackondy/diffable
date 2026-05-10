@@ -280,6 +280,12 @@ STYLE = """
         .diff-removed { background-color: #ffeef0 !important; color: #a40e26 !important; cursor: not-allowed; }
         .diff-removed td, .diff-removed th { color: #a40e26 !important; text-decoration: line-through; background-color: #ffeef0 !important; }
 
+        /* GitHub-style left accent for modified rows — a scannable signal
+           that a row has any change, without tinting the whole row (which
+           would fight the inline cell highlights). Inset box-shadow keeps
+           the layout from shifting. */
+        .diff-modified th { box-shadow: inset 3px 0 0 0 #d4a72c; }
+
         /* Modified cells rely on the inline old/new colours to signal the
            change — adding a yellow background on top of red strikethrough +
            green added text was three colours fighting for attention. */
@@ -840,8 +846,9 @@ JS_TEMPLATE = Template("""
 
             const item = c || p;
             let rowCls = '';
-            if (status === 'added')   rowCls = 'diff-added';
-            if (status === 'removed') rowCls = 'diff-removed';
+            if (status === 'added')    rowCls = 'diff-added';
+            if (status === 'removed')  rowCls = 'diff-removed';
+            if (status === 'modified') rowCls = 'diff-modified';
 
             const rowIdx = ri;
 
