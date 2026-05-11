@@ -68,7 +68,7 @@ STYLE = """
         .main-content {
             flex: 1;
             overflow: hidden;
-            padding: 48px 40px;
+            padding: 40px 40px;
             display: flex;
             flex-direction: column;
         }
@@ -87,7 +87,7 @@ STYLE = """
             display: flex;
             justify-content: space-between;
             align-items: flex-end;
-            margin-bottom: 32px;
+            margin-bottom: 24px;
             flex-wrap: wrap;
             gap: 16px;
         }
@@ -99,8 +99,6 @@ STYLE = """
             color: #1d1d1f;
             margin-bottom: 6px;
         }
-
-        .subtitle { font-size: 14px; color: #86868b; font-weight: 400; }
 
         .controls {
             display: flex;
@@ -118,11 +116,9 @@ STYLE = """
         }
         .control-pill.toggle-control { gap: 10px; }
         .control-pill label {
-            font-size: 12px;
-            font-weight: 600;
+            font-size: 13px;
+            font-weight: 500;
             color: #86868b;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
         .control-pill.toggle-control label {
             user-select: none;
@@ -199,26 +195,23 @@ STYLE = """
             border-spacing: 0;
             background: #fff;
             border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            border: 1px solid rgba(0,0,0,0.08);
         }
 
         thead th {
-            background: #eaeaef;
+            background: #fff;
             font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.6px;
+            font-weight: 600;
             color: #1d1d1f;
             padding: 14px 16px;
             text-align: left;
-            border-bottom: 2px solid #d2d2d7;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
             white-space: nowrap;
             position: sticky;
             top: 0;
             z-index: 3;
         }
         thead th:first-child {
-            border-right: 1px solid #d2d2d7;
             position: sticky;
             left: 0;
             z-index: 4;
@@ -228,11 +221,11 @@ STYLE = """
             font-size: 13px;
             font-weight: 600;
             color: #49494d;
-            background-color: #f9f9fb;
+            background-color: #fff;
             padding: 12px 16px;
             text-align: left;
-            border-bottom: 1px solid #f0f0f5;
-            border-right: 1px solid #e8e8ed;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+            border-right: 1px solid rgba(0,0,0,0.06);
             max-width: 180px;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -246,7 +239,7 @@ STYLE = """
             padding: 12px 16px;
             font-size: 14px;
             color: #1d1d1f;
-            border-bottom: 1px solid #f0f0f5;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
             max-width: 220px;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -261,9 +254,14 @@ STYLE = """
         .fade-in { animation: fadeIn 0.3s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-        tbody tr:nth-child(even):not(.diff-added):not(.diff-removed) th { background-color: #f5f5f7; }
-        tbody tr:nth-child(even):not(.diff-added):not(.diff-removed):not(.diff-modified) { background-color: #fafafa; }
+        /* Subtle zebra striping for long-table scanning. Finder-style:
+           white / near-white alternation, just enough to anchor the eye
+           across many rows. Added / removed rows opt out so their semantic
+           tint isn't overridden. */
+        tbody tr:nth-child(even):not(.diff-added):not(.diff-removed) { background-color: #fafafa; }
+        tbody tr:nth-child(even):not(.diff-added):not(.diff-removed) th { background-color: #fafafa; }
         tbody tr:hover:not(.diff-removed):not(.spacer-row) { background-color: #f0f0f5; }
+        tbody tr:hover:not(.diff-removed):not(.spacer-row) th { background-color: #f0f0f5; }
 
         tbody td.cell-active,
         tbody th.cell-active {
@@ -285,57 +283,50 @@ STYLE = """
         .diff-removed { background-color: #ffeef0 !important; }
         .diff-removed td, .diff-removed th { background-color: #ffeef0 !important; }
 
-        /* Symmetric markers for the value↔empty cases inside a dissimilar
-           cell. Strikethrough on the removed value reads "this was here,
-           now gone"; green bold on the added value reads "newly added".
-           The yellow gutter still handles the cell-level "this changed"
-           signal — these classes are about the value semantics. */
+        /* Value-level markers for the empty↔value cases.
+             value → empty: strikethrough on the old value + 0.7 opacity.
+             empty → value: bold green so the new value reads as confidently
+             added (this is the user's "make new values stand out" knob).
+           Modified cells with both sides non-empty rely on the inline
+           old/new colours from the diff marks; no row-level chrome. */
         .cell-removed-value { text-decoration: line-through; opacity: 0.7; }
-        .cell-added-value   { color: #176f2c; font-weight: 500; }
+        .cell-added-value   { color: #1f7e3a; font-weight: 700; }
 
-        /* Yellow left-gutter accent for changed rows / dissimilar swaps.
-           Rendered as a positioned ::before so consecutive accented rows
-           have clean visual breaks at the row boundary (an inset
-           box-shadow would span the full cell height and the borders
-           between rows are subtle enough that adjacent gutters look like
-           one continuous bar). The top/bottom 4px inset leaves the gap.
-           — .diff-modified th: scannable "this row changed" indicator
-             for non-changes-only views (no fight with inline highlights).
-           — .cell-dissimilar: cell-level marker when inlineDiff falls
-             back to plain new-only because the old/new strings share
-             too little structure for char-diff to be meaningful. */
-        td.cell-dissimilar { position: relative; }
-        .diff-modified th::before,
-        td.cell-dissimilar::before,
-        th.cell-dissimilar::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 4px;
-            bottom: 4px;
-            width: 3px;
-            background: #d4a72c;
-            pointer-events: none;
+        /* --- Inline diff marks ---
+           Saturated pill backgrounds were swapped for pure typographic
+           marks: red+strikethrough for deletions, green+semibold for
+           additions, no fill. Reads as an editorial annotation on text
+           (Pages-style tracked changes) instead of a UI control glued
+           to the data. Colours tightened to less GitHub-y values. */
+        .diff-unified .hi-del, .diff-unified-inline .hi-del,
+        .diff-old .hi, .diff-line-old .hi {
+            color: #d70015;
+            text-decoration: line-through;
+            text-decoration-thickness: 1px;
+        }
+        .diff-unified .hi-add, .diff-unified-inline .hi-add,
+        .diff-new .hi, .diff-line-new .hi {
+            color: #1f7e3a;
+            font-weight: 600;
         }
 
-        /* Modified cells rely on the inline old/new colours to signal the
-           change — adding a yellow background on top of red strikethrough +
-           green added text was three colours fighting for attention. */
+        /* Cell-level split spans (old → new) used for whitespace-text
+           mixed changes. Parent styling is restrained; the .hi marks
+           inside carry the semantic colour. */
+        .diff-old { opacity: 0.7; margin-right: 8px; }
+        .diff-new { font-weight: 500; }
 
-        .diff-old { color: #d73a49; margin-right: 6px; font-size: 0.9em; opacity: 0.8; }
-        .diff-new { color: #22863a; font-weight: 600; }
-        .diff-old .hi { background-color: #fdb8c0; border-radius: 2px; padding: 0 1px; }
-        .diff-new .hi { background-color: #acf2bd; border-radius: 2px; padding: 0 1px; }
-
+        /* Side-panel split blocks. The pink/green row tint frames the
+           before/after pair; inner .hi marks (defined above) emphasise
+           the specific change without their own fill. */
         .diff-block { display: flex; flex-direction: column; gap: 8px; }
-        .diff-line { padding: 6px 8px; border-radius: 4px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
-        .diff-line-old { background-color: #ffeef0; color: #24292e; }
-        .diff-line-old .hi { background-color: #fdb8c0; border-radius: 2px; padding: 1px 2px; font-weight: 600; }
-        .diff-line-new { background-color: #e6ffed; color: #24292e; }
-        .diff-line-new .hi { background-color: #acf2bd; border-radius: 2px; padding: 1px 2px; font-weight: 600; }
-        .diff-unified { padding: 6px 8px; border-radius: 4px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; background-color: #f8f8f8; color: #24292e; }
-        .diff-unified .hi-del, .diff-unified-inline .hi-del { background-color: #fdb8c0; border-radius: 2px; padding: 1px 2px; color: #a40e26; text-decoration: line-through; }
-        .diff-unified .hi-add, .diff-unified-inline .hi-add { background-color: #acf2bd; border-radius: 2px; padding: 1px 2px; font-weight: 600; color: #176f2c; }
+        .diff-line { padding: 8px 12px; border-radius: 6px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+        .diff-line-old { background-color: #fff5f5; color: #1d1d1f; }
+        .diff-line-new { background-color: #f0faf2; color: #1d1d1f; }
+
+        /* Unified-mode block in side panel (fully deleted / added value,
+           not split into old/new lines). Single muted background. */
+        .diff-unified { padding: 8px 12px; border-radius: 6px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; background-color: #fafafa; color: #1d1d1f; }
 
 
         /* --- Side panel --- */
@@ -380,8 +371,7 @@ STYLE = """
         .panel-body { padding: 24px; }
         .detail-section { margin-bottom: 24px; }
         .detail-label {
-            font-size: 11px; font-weight: 600;
-            text-transform: uppercase; letter-spacing: 0.6px;
+            font-size: 12px; font-weight: 600;
             color: #86868b; margin-bottom: 6px;
         }
         .detail-value { font-size: 15px; color: #1d1d1f; line-height: 1.5; }
@@ -1366,7 +1356,6 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
         <div class="header-bar">
             <div>
                 <h1>$TITLE</h1>
-                <p class="subtitle">Click any row for details. Switch versions to track changes.</p>
             </div>
             <div class="controls">
                 $TOGGLE_PILL<div class="control-pill version-control">
