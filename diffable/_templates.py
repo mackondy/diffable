@@ -284,31 +284,32 @@ STYLE = """
         .diff-removed td, .diff-removed th { background-color: #FFE0DC !important; }
 
 
-        /* Modified cells stay on the default cell bg — the inline pink/
-           green/yellow pill backgrounds carry the signal without tinting
-           the text colour (matches GitHub: the highlight bg does the work,
-           the text reads in its default colour).
-             empty → value       (.cell-added-value):   green pill
-             value → empty       (.cell-removed-value): pink pill
-             value → other value (.cell-swap-value):    yellow pill */
-        .cell-removed-value { background-color: #fdb8c0; border-radius: 2px; padding: 0 2px; }
-        .cell-added-value   { background-color: #abf2bc; border-radius: 2px; padding: 0 2px; }
-        .cell-swap-value    { background-color: #fff5b5; border-radius: 2px; padding: 0 2px; }
+        /* For the three "whole cell content changed" cases — empty→value,
+           value→empty, and value→other-value (dissimilar swap) — apply
+           a single cell-level tint. No darker inner pill — the cell tint
+           is already a continuous block of colour and adding a pill on
+           top doubled the signal. The text reads in default colour
+           against the soft cell bg. */
+        td.cell-added,   th.cell-added   { background-color: #e6ffec; }
+        td.cell-removed, th.cell-removed { background-color: #ffebe9; }
+        td.cell-swap,    th.cell-swap    { background-color: #fffceb; }
 
         /* --- Inline diff marks ---
-           GitHub-style word/character highlights: pink pill for deletes,
-           green pill for inserts. The pill background does all the work
-           — text stays in its default colour so the cell reads cleanly
-           and the pill highlights only signal "this run changed". */
+           Soft pink/green tints in the same family as the cell-level
+           treatment but one shade darker — so the changed char/word
+           pops against the surrounding unchanged text without breaking
+           the soft palette rhythm.
+                cell-level pink #ffebe9   inline pink #ffd7d5
+                cell-level green #e6ffec  inline green #dafbe1  */
         .diff-unified .hi-del, .diff-unified-inline .hi-del,
         .diff-old .hi, .diff-line-old .hi {
-            background-color: #fdb8c0;
+            background-color: #ffd7d5;
             border-radius: 2px;
             padding: 0 2px;
         }
         .diff-unified .hi-add, .diff-unified-inline .hi-add,
         .diff-new .hi, .diff-line-new .hi {
-            background-color: #abf2bc;
+            background-color: #dafbe1;
             border-radius: 2px;
             padding: 0 2px;
         }
@@ -960,7 +961,7 @@ JS_TEMPLATE = Template("""
                             cellCls = ' cell-modified cell-added';
                         } else {
                             cell = '<span class="cell-swap-value">' + cVal + '</span>';
-                            cellCls = ' cell-modified';
+                            cellCls = ' cell-modified cell-swap';
                         }
                     } else {
                         cell = d.mode.startsWith('unified')
