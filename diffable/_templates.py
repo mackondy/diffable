@@ -283,12 +283,16 @@ STYLE = """
         .diff-removed { background-color: #ffeef0 !important; }
         .diff-removed td, .diff-removed th { background-color: #ffeef0 !important; }
 
-        /* Value-level markers for the empty↔value cases.
-             value → empty: strikethrough on the old value + 0.7 opacity.
-             empty → value: bold green so the new value reads as confidently
-             added (this is the user's "make new values stand out" knob).
-           Modified cells with both sides non-empty rely on the inline
-           old/new colours from the diff marks; no row-level chrome. */
+        /* Cell-level tints for the empty↔value cases — symmetric with
+           the row-level .diff-added / .diff-removed: a previously-empty
+           cell now filled gets the same green wash as a newly-added row,
+           and value→empty gets the same pink. The inner value spans
+           carry the typographic semantics on top:
+             value → empty (.cell-removed-value): strikethrough + 0.7 opacity
+             empty → value (.cell-added-value):   bold green text
+           Together: scan the column for tint, read the value for detail. */
+        td.cell-added,   th.cell-added   { background-color: #e6ffed; }
+        td.cell-removed, th.cell-removed { background-color: #ffeef0; }
         .cell-removed-value { text-decoration: line-through; opacity: 0.7; }
         .cell-added-value   { color: #1f7e3a; font-weight: 700; }
 
@@ -897,20 +901,19 @@ JS_TEMPLATE = Template("""
                 if (status === 'modified' && c && p && String(c[col] ?? '') !== String(p[col] ?? '')) {
                     const d = inlineDiff(p[col], c[col]);
                     if (d.dissimilar) {
-                        // value↔empty cases carry their own value-level
-                        // marker (strikethrough / green-bold), which is
-                        // already enough to signal "removed" / "added" —
-                        // adding the yellow gutter on top is redundant.
-                        // The gutter only goes on true dissimilar swaps
-                        // (both sides non-empty but unrelated), where the
-                        // plain new-value text alone has no change cue.
+                        // value↔empty cases get a cell-level tint that
+                        // mirrors the row-level .diff-added / .diff-removed
+                        // — a previously-empty cell now filled is the same
+                        // semantic as an added row, just at finer scope.
+                        // The inner span styling (bold green / strikethrough)
+                        // carries the value-level signal on top of the tint.
                         // Side panel always has the full before/after.
                         if (cVal === '' && pVal !== '') {
                             cell = '<span class="cell-removed-value">' + pVal + '</span>';
-                            cellCls = ' cell-modified';
+                            cellCls = ' cell-modified cell-removed';
                         } else if (pVal === '' && cVal !== '') {
                             cell = '<span class="cell-added-value">' + cVal + '</span>';
-                            cellCls = ' cell-modified';
+                            cellCls = ' cell-modified cell-added';
                         } else {
                             cell = cVal || pVal;
                             cellCls = ' cell-modified cell-dissimilar';
