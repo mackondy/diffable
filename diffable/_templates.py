@@ -376,6 +376,9 @@ STYLE = """
             font-size: 14px;
             line-height: 1.6;
             color: #1d1d1f;
+            /* Preserve newlines so multi-line notes (e.g. a pin's pull-up
+               + pull-down refdes mapping) render as separate lines. */
+            white-space: pre-wrap;
         }
 
         .placeholder {
