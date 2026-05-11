@@ -195,7 +195,7 @@ def _norm(v):
     return "" if v is None else str(v)
 
 
-def _build_diff_only_versions(versions, data_key, key):
+def _build_diff_only_versions(versions, data_key, key, note_field="note"):
     """Strip each version down to its changed rows vs the previous version.
 
     Returns a list of versions where each entry has a ``diff_rows`` list
@@ -211,6 +211,12 @@ def _build_diff_only_versions(versions, data_key, key):
     that ever changes. Records identical across all versions are dropped
     entirely, which is the whole point of changes_only mode. Spacer rows
     are dropped too.
+
+    ``note_field`` is excluded from the modification check — if two rows
+    differ only in their note (auxiliary metadata, not displayed as a
+    column), they are treated as identical. Useful for e.g. resistor
+    refdes mappings that vary across product but represent the same
+    component role.
     """
     new_versions = []
     prev_rows_by_key = {}
@@ -238,7 +244,7 @@ def _build_diff_only_versions(versions, data_key, key):
                 if prev is None:
                     diff_rows.append({"status": "added", "curr": curr})
                 else:
-                    cols = set(prev) | set(curr)
+                    cols = (set(prev) | set(curr)) - {note_field}
                     if any(_norm(prev.get(c)) != _norm(curr.get(c)) for c in cols):
                         diff_rows.append({
                             "status": "modified",
@@ -428,7 +434,8 @@ class DiffTable:
 
     def _render(self, versions, data_key, key, display_cols):
         if self.changes_only:
-            versions = _build_diff_only_versions(versions, data_key, key)
+            versions = _build_diff_only_versions(versions, data_key, key,
+                                                 note_field=self.note_field)
 
         col_headers = "".join(
             f"<th>{self._col_label(c)}</th>" for c in display_cols

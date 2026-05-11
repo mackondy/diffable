@@ -872,7 +872,14 @@ JS_TEMPLATE = Template("""
             } else if (!c && p) {
                 status = 'removed';
             } else if (c && p) {
-                for (const col of COLS) {
+                // Compare every key on either side that isn't the note
+                // field. Note is auxiliary metadata (shown only in the
+                // side panel); a change there alone shouldn't flag the
+                // row as modified — matches the Python-side filter in
+                // _build_diff_only_versions.
+                const allKeys = new Set([...Object.keys(c), ...Object.keys(p)]);
+                allKeys.delete(NOTE_FIELD);
+                for (const col of allKeys) {
                     if (String(c[col] ?? '') !== String(p[col] ?? '')) { status = 'modified'; break; }
                 }
             }
