@@ -285,55 +285,30 @@ STYLE = """
 
 
         /* Modified cells stay on the default cell bg — the inline pink/
-           green pills on the diff marks are enough signal without a
-           cell-level tint adding a third colour to the mix. For value↔
-           empty / dissimilar-swap cases the inner span renders as a
-           GitHub-style pill so it matches the inline .hi-add / .hi-del
-           rendering elsewhere:
-             empty → value      (.cell-added-value):   green pill
-             value → empty      (.cell-removed-value): pink pill
-             value → other value (.cell-swap-value):   yellow pill
-                  (the swap case — neither pure-add nor pure-remove) */
-        .cell-removed-value {
-            background-color: #fdb8c0;
-            color: #82071e;
-            border-radius: 2px;
-            padding: 0 2px;
-        }
-        .cell-added-value {
-            background-color: #abf2bc;
-            color: #044f1e;
-            font-weight: 600;
-            border-radius: 2px;
-            padding: 0 2px;
-        }
-        .cell-swap-value {
-            background-color: #fff5b5;
-            color: #735c0f;
-            font-weight: 600;
-            border-radius: 2px;
-            padding: 0 2px;
-        }
+           green/yellow pill backgrounds carry the signal without tinting
+           the text colour (matches GitHub: the highlight bg does the work,
+           the text reads in its default colour).
+             empty → value       (.cell-added-value):   green pill
+             value → empty       (.cell-removed-value): pink pill
+             value → other value (.cell-swap-value):    yellow pill */
+        .cell-removed-value { background-color: #fdb8c0; border-radius: 2px; padding: 0 2px; }
+        .cell-added-value   { background-color: #abf2bc; border-radius: 2px; padding: 0 2px; }
+        .cell-swap-value    { background-color: #fff5b5; border-radius: 2px; padding: 0 2px; }
 
         /* --- Inline diff marks ---
-           GitHub-style word/character highlights: medium-saturation pink
-           pill for deletes with dark red text, medium green pill for
-           inserts with dark green semibold text. The light pill bg lets
-           the changed run pop within the surrounding cell content
-           without dominating it. No strikethrough — the pink colour +
-           pill already conveys "removed" on its own. */
+           GitHub-style word/character highlights: pink pill for deletes,
+           green pill for inserts. The pill background does all the work
+           — text stays in its default colour so the cell reads cleanly
+           and the pill highlights only signal "this run changed". */
         .diff-unified .hi-del, .diff-unified-inline .hi-del,
         .diff-old .hi, .diff-line-old .hi {
             background-color: #fdb8c0;
-            color: #82071e;
             border-radius: 2px;
             padding: 0 2px;
         }
         .diff-unified .hi-add, .diff-unified-inline .hi-add,
         .diff-new .hi, .diff-line-new .hi {
             background-color: #abf2bc;
-            color: #044f1e;
-            font-weight: 600;
             border-radius: 2px;
             padding: 0 2px;
         }
