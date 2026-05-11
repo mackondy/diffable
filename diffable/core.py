@@ -290,6 +290,10 @@ class DiffTable:
     output : str or Path or None — output HTML path. Defaults to ``<title>.html``
         next to the source file, or in the current directory if ``source`` is a dict.
     columns : list[str] or None — explicit columns to display. Auto-detected if None.
+    hide_columns : list[str] or None — columns to omit from the rendered
+        table (applied after auto-detection / explicit ``columns``). The
+        key column is always shown regardless. Useful when the source data
+        carries metadata fields you don't want in the diff view.
     note_field : str — field shown in the side panel. Default "note".
     changes_only : bool — if True, pre-compute per-version diffs in Python and
         embed only changed rows in the output (added / modified / removed
@@ -301,8 +305,8 @@ class DiffTable:
     """
 
     def __init__(self, source, *, title="Diff Explorer", key=None,
-                 output=None, columns=None, note_field="note",
-                 changes_only=True):
+                 output=None, columns=None, hide_columns=None,
+                 note_field="note", changes_only=True):
         if isinstance(source, dict):
             self.json_source = None
             self._data = source
@@ -313,6 +317,7 @@ class DiffTable:
         self._key = key
         self._output = Path(output) if output else None
         self._columns = columns
+        self._hide_columns = set(hide_columns) if hide_columns else set()
         self.note_field = note_field
         self.changes_only = changes_only
 
@@ -401,6 +406,11 @@ class DiffTable:
             display_cols = [c for c in self._columns if c in all_cols]
         else:
             display_cols = [c for c in all_cols if c != self.note_field]
+
+        # Drop hidden columns. The key column is always shown — it's
+        # re-inserted at index 0 below regardless.
+        if self._hide_columns:
+            display_cols = [c for c in display_cols if c not in self._hide_columns]
 
         if key in display_cols:
             display_cols.remove(key)
