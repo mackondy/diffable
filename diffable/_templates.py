@@ -283,39 +283,49 @@ STYLE = """
         .diff-removed { background-color: #FFE0DC !important; }
         .diff-removed td, .diff-removed th { background-color: #FFE0DC !important; }
 
-        /* Three-colour palette at cell scope, matching the row-level
-           treatment one rung up:
-             modified         (value → different value)   light yellow
-             added   (.cell-added,    empty → value)      light green
-             removed (.cell-removed,  value → empty)      light pink
-           cell-modified is the base; the .cell-added / .cell-removed
-           sub-rules below override it for the empty↔value cases (they
-           come after, so equal specificity → last one wins). The inner
-           value spans then carry the typographic semantics on top:
-             empty → value (.cell-added-value):   bold green text
-             value → empty (.cell-removed-value): strikethrough + 0.7 opacity
-           Together: scan the column for tint, read the value for detail. */
-        td.cell-modified, th.cell-modified { background-color: #FFF5CC; }
-        td.cell-added,    th.cell-added    { background-color: #D9F1D8; }
-        td.cell-removed,  th.cell-removed  { background-color: #FFE0DC; }
-        .cell-removed-value { color: #86868b; text-decoration: line-through; text-decoration-thickness: 1px; }
-        .cell-added-value   { color: #1E7E2C; font-weight: 700; }
+
+        /* Modified cells stay on the default cell bg — the inline pink/
+           green pills on the diff marks are enough signal without a
+           cell-level tint adding a third colour to the mix. For value↔
+           empty cases the inner span renders as a GitHub-style pill so
+           it matches the inline .hi-add / .hi-del rendering elsewhere:
+             empty → value (.cell-added-value):   green pill
+             value → empty (.cell-removed-value): pink pill */
+        .cell-removed-value {
+            background-color: #fdb8c0;
+            color: #82071e;
+            border-radius: 2px;
+            padding: 0 2px;
+        }
+        .cell-added-value {
+            background-color: #abf2bc;
+            color: #044f1e;
+            font-weight: 600;
+            border-radius: 2px;
+            padding: 0 2px;
+        }
 
         /* --- Inline diff marks ---
-           Pure typographic marks (no pill fills): deep tomato + strikethrough
-           for deletions, deep grass + semibold for additions. Hues from the
-           Apple iWork accent palette family — slightly warmer than the
-           Tailwind shades; reads as cheerful Apple, not dev-tool. */
+           GitHub-style word/character highlights: medium-saturation pink
+           pill for deletes with dark red text, medium green pill for
+           inserts with dark green semibold text. The light pill bg lets
+           the changed run pop within the surrounding cell content
+           without dominating it. No strikethrough — the pink colour +
+           pill already conveys "removed" on its own. */
         .diff-unified .hi-del, .diff-unified-inline .hi-del,
         .diff-old .hi, .diff-line-old .hi {
-            color: #C40D1F;
-            text-decoration: line-through;
-            text-decoration-thickness: 1px;
+            background-color: #fdb8c0;
+            color: #82071e;
+            border-radius: 2px;
+            padding: 0 2px;
         }
         .diff-unified .hi-add, .diff-unified-inline .hi-add,
         .diff-new .hi, .diff-line-new .hi {
-            color: #1E7E2C;
+            background-color: #abf2bc;
+            color: #044f1e;
             font-weight: 600;
+            border-radius: 2px;
+            padding: 0 2px;
         }
 
         /* Cell-level split spans (old → new) used for whitespace-text
@@ -774,8 +784,14 @@ JS_TEMPLATE = Template("""
         // the whole old + whole new with no inner highlighting and flag
         // the result as dissimilar so the caller can paint a gutter
         // accent on the cell.
+        //
+        // Exception: short values (≤ 12 chars, like "10kΩ" → "4.7kΩ")
+        // skip the gate. The user can read both old and new at a glance
+        // anyway, and the inline rendering ([-10-][+4.7+]kΩ) is more
+        // informative than a plain new-value-only fallback.
         const similarity = equalCount / Math.max(a.length, b.length);
-        if (similarity < 0.7) {
+        const isShort = Math.max(a.length, b.length) <= 12;
+        if (similarity < 0.7 && !isShort) {
             return { oldHtml: esc(a), newHtml: esc(b),
                      unifiedHtml: '', mode: 'split', dissimilar: true };
         }
@@ -927,13 +943,8 @@ JS_TEMPLATE = Template("""
 
             const item = c || p;
             let rowCls = '';
-            if (status === 'added')    rowCls = 'diff-added';
-            if (status === 'removed')  rowCls = 'diff-removed';
-            // The 'modified' row accent only earns its keep when there are
-            // unchanged rows around it to contrast against. In changes_only
-            // mode every visible row is already a change, so the accent
-            // would be on every row — redundant noise.
-            if (status === 'modified' && !CHANGES_ONLY) rowCls = 'diff-modified';
+            if (status === 'added')   rowCls = 'diff-added';
+            if (status === 'removed') rowCls = 'diff-removed';
 
             const rowIdx = ri;
 
@@ -948,12 +959,7 @@ JS_TEMPLATE = Template("""
                     const d = inlineDiff(p[col], c[col]);
                     if (d.dissimilar) {
                         // value↔empty cases get a cell-level tint that
-                        // mirrors the row-level .diff-added / .diff-removed
-                        // — a previously-empty cell now filled is the same
-                        // semantic as an added row, just at finer scope.
-                        // The inner span styling (bold green / strikethrough)
-                        // carries the value-level signal on top of the tint.
-                        // Side panel always has the full before/after.
+                        // mirrors the row-level .diff-added / .diff-removed.
                         if (cVal === '' && pVal !== '') {
                             cell = '<span class="cell-removed-value">' + pVal + '</span>';
                             cellCls = ' cell-modified cell-removed';
@@ -962,7 +968,7 @@ JS_TEMPLATE = Template("""
                             cellCls = ' cell-modified cell-added';
                         } else {
                             cell = cVal || pVal;
-                            cellCls = ' cell-modified cell-dissimilar';
+                            cellCls = ' cell-modified';
                         }
                     } else {
                         cell = d.mode.startsWith('unified')
