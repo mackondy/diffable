@@ -285,12 +285,13 @@ STYLE = """
         .diff-removed { background-color: #ffeef0 !important; }
         .diff-removed td, .diff-removed th { background-color: #ffeef0 !important; }
 
-        /* Value that was present and is now empty. Strikethrough conveys
-           "removed" universally; we keep the text in the default colour
-           (no red) so it doesn't read as alarming. Slight opacity nudges
-           it toward "faded". The yellow gutter still does the "this cell
-           changed" job. */
+        /* Symmetric markers for the value↔empty cases inside a dissimilar
+           cell. Strikethrough on the removed value reads "this was here,
+           now gone"; green bold on the added value reads "newly added".
+           The yellow gutter still handles the cell-level "this changed"
+           signal — these classes are about the value semantics. */
         .cell-removed-value { text-decoration: line-through; opacity: 0.7; }
+        .cell-added-value   { color: #176f2c; font-weight: 500; }
 
         /* Yellow left-gutter accent for changed rows / dissimilar swaps.
            Rendered as a positioned ::before so consecutive accented rows
@@ -906,18 +907,24 @@ JS_TEMPLATE = Template("""
                 if (status === 'modified' && c && p && String(c[col] ?? '') !== String(p[col] ?? '')) {
                     const d = inlineDiff(p[col], c[col]);
                     if (d.dissimilar) {
-                        // Dissimilar swap or value↔empty. Cell shows whichever
-                        // side has data; yellow gutter signals "this cell
-                        // changed". For value→empty we wrap the old value in
-                        // .cell-removed-value (strikethrough, no colour) so
-                        // it reads as "this value was here, now gone" without
-                        // the heavy red look. Side panel has the full diff.
+                        // value↔empty cases carry their own value-level
+                        // marker (strikethrough / green-bold), which is
+                        // already enough to signal "removed" / "added" —
+                        // adding the yellow gutter on top is redundant.
+                        // The gutter only goes on true dissimilar swaps
+                        // (both sides non-empty but unrelated), where the
+                        // plain new-value text alone has no change cue.
+                        // Side panel always has the full before/after.
                         if (cVal === '' && pVal !== '') {
                             cell = '<span class="cell-removed-value">' + pVal + '</span>';
+                            cellCls = ' cell-modified';
+                        } else if (pVal === '' && cVal !== '') {
+                            cell = '<span class="cell-added-value">' + cVal + '</span>';
+                            cellCls = ' cell-modified';
                         } else {
                             cell = cVal || pVal;
+                            cellCls = ' cell-modified cell-dissimilar';
                         }
-                        cellCls = ' cell-modified cell-dissimilar';
                     } else {
                         cell = d.mode.startsWith('unified')
                             ? '<span class="diff-unified-inline">' + d.unifiedHtml + '</span>'
