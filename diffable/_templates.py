@@ -295,21 +295,20 @@ STYLE = """
         td.cell-swap,    th.cell-swap    { background-color: #fffceb; }
 
         /* --- Inline diff marks ---
-           Soft pink/green tints in the same family as the cell-level
-           treatment but one shade darker — so the changed char/word
-           pops against the surrounding unchanged text without breaking
-           the soft palette rhythm.
-                cell-level pink #ffebe9   inline pink #ffd7d5
-                cell-level green #e6ffec  inline green #dafbe1  */
+           Mid-tone pink/green tints, sitting between the cell-level wash
+           (#ffebe9 / #e6ffec) and the louder pill shade (#fdb8c0 /
+           #abf2bc). Visible enough that a single changed character pops
+           against the surrounding unchanged text, but still soft enough
+           to read as one palette family with the cell-level treatment. */
         .diff-unified .hi-del, .diff-unified-inline .hi-del,
         .diff-old .hi, .diff-line-old .hi {
-            background-color: #ffd7d5;
+            background-color: #fec1bf;
             border-radius: 2px;
             padding: 0 2px;
         }
         .diff-unified .hi-add, .diff-unified-inline .hi-add,
         .diff-new .hi, .diff-line-new .hi {
-            background-color: #dafbe1;
+            background-color: #b9f2c5;
             border-radius: 2px;
             padding: 0 2px;
         }
