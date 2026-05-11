@@ -749,12 +749,33 @@ JS_TEMPLATE = Template("""
         }
 
         // Identifier-like strings (no whitespace, e.g. SCH net names like
-        // CP10B_CMN0_REFCLK_DN vs CP10G_CMN0_REFCLK_DN). Render as a single
-        // unified line: equal chars plain, the differing run shown as pink
-        // delete + green insert pills adjacent. Much more compact than the
-        // two-line old/new split when the change is localized.
+        // CP10B_CMN0_REFCLK_DN vs CP10G_CMN0_REFCLK_DN). Build BOTH the
+        // unified char-level rendering (used in the compact cell view)
+        // and a split before/after rendering (used in the side panel
+        // where there's space for two rows and easier copy-paste).
         if (!/\\s/.test(a) && !/\\s/.test(b)) {
-            return { oldHtml: '', newHtml: '',
+            let oldHtml = '', newHtml = '';
+            let oldBuf = '', newBuf = '', splitOp = null;
+            const flushSplit = () => {
+                if (splitOp === 'equal') {
+                    oldHtml += esc(oldBuf);
+                    newHtml += esc(newBuf);
+                } else if (splitOp === 'delete') {
+                    oldHtml += '<span class="hi">' + esc(oldBuf) + '</span>';
+                } else if (splitOp === 'insert') {
+                    newHtml += '<span class="hi">' + esc(newBuf) + '</span>';
+                }
+                oldBuf = ''; newBuf = ''; splitOp = null;
+            };
+            for (const [op, oi, ni] of charOps) {
+                if (op !== splitOp) flushSplit();
+                splitOp = op;
+                if (op === 'equal') { oldBuf += a[oi]; newBuf += b[ni]; }
+                else if (op === 'delete') oldBuf += a[oi];
+                else newBuf += b[ni];
+            }
+            flushSplit();
+            return { oldHtml, newHtml,
                      unifiedHtml: buildUnifiedHtml(), mode: 'unified-mod' };
         }
 
@@ -983,7 +1004,17 @@ JS_TEMPLATE = Template("""
 
         if (cellChanged) {
             const d = inlineDiff(pVal, cVal);
-            if (d.mode.startsWith('unified')) {
+            // For unified-mod (no-whitespace mixed change), the cell shows
+            // the compact one-line view but the panel has room for the
+            // before/after split — easier to read and easier to copy.
+            // Pure unified-del / unified-add still render as one block.
+            if (d.mode === 'unified-mod' && d.oldHtml && d.newHtml) {
+                html += '<div class="detail-section"><div class="detail-label">' + esc(colLabel) + '</div>'
+                    + '<div class="detail-value"><div class="diff-block">'
+                    + '<div class="diff-line diff-line-old">' + d.oldHtml + '</div>'
+                    + '<div class="diff-line diff-line-new">' + d.newHtml + '</div>'
+                    + '</div></div></div>';
+            } else if (d.mode.startsWith('unified')) {
                 html += '<div class="detail-section"><div class="detail-label">' + esc(colLabel) + '</div>'
                     + '<div class="detail-value"><div class="diff-unified">' + d.unifiedHtml + '</div></div></div>';
             } else {
