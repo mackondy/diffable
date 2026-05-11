@@ -298,7 +298,7 @@ STYLE = """
         td.cell-modified, th.cell-modified { background-color: #FFF5CC; }
         td.cell-added,    th.cell-added    { background-color: #D9F1D8; }
         td.cell-removed,  th.cell-removed  { background-color: #FFE0DC; }
-        .cell-removed-value { color: #C40D1F; text-decoration: line-through; text-decoration-thickness: 1px; }
+        .cell-removed-value { color: #86868b; text-decoration: line-through; text-decoration-thickness: 1px; }
         .cell-added-value   { color: #1E7E2C; font-weight: 700; }
 
         /* --- Inline diff marks ---
@@ -331,6 +331,10 @@ STYLE = """
         .diff-line { padding: 8px 12px; border-radius: 6px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
         .diff-line-old { background-color: #FFF1EE; color: #1d1d1f; }
         .diff-line-new { background-color: #EFF8EF; color: #1d1d1f; }
+        /* Placeholder for the empty side of a value↔empty diff block —
+           italic dim grey reads as "no content here" instead of as an
+           abandoned coloured rectangle. */
+        .diff-empty { color: #aeaeb2; font-style: italic; }
 
         /* Unified-mode block in side panel (fully deleted / added value,
            not split into old/new lines). Single muted background. */
@@ -386,9 +390,8 @@ STYLE = """
 
         .note-block {
             background: #f5f5f7;
-            border-left: 3px solid #0071e3;
             padding: 12px 16px;
-            border-radius: 0 8px 8px 0;
+            border-radius: 8px;
             font-size: 14px;
             line-height: 1.6;
             color: #1d1d1f;
@@ -977,10 +980,15 @@ JS_TEMPLATE = Template("""
                 html += '<div class="detail-section"><div class="detail-label">' + esc(colLabel) + '</div>'
                     + '<div class="detail-value"><div class="diff-unified">' + d.unifiedHtml + '</div></div></div>';
             } else {
+                // When one side is empty (value↔empty case), drop in an
+                // italic-grey "(empty)" placeholder so the diff-line block
+                // doesn't render as an orphaned coloured rectangle.
+                const oldShown = d.oldHtml || '<span class="diff-empty">(empty)</span>';
+                const newShown = d.newHtml || '<span class="diff-empty">(empty)</span>';
                 html += '<div class="detail-section"><div class="detail-label">' + esc(colLabel) + '</div>'
                     + '<div class="detail-value"><div class="diff-block">'
-                    + '<div class="diff-line diff-line-old">' + d.oldHtml + '</div>'
-                    + '<div class="diff-line diff-line-new">' + d.newHtml + '</div>'
+                    + '<div class="diff-line diff-line-old">' + oldShown + '</div>'
+                    + '<div class="diff-line diff-line-new">' + newShown + '</div>'
                     + '</div></div></div>';
             }
         } else {
