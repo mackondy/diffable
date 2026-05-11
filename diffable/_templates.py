@@ -280,19 +280,29 @@ STYLE = """
         .diff-removed { background-color: #ffeef0 !important; color: #a40e26 !important; cursor: not-allowed; }
         .diff-removed td, .diff-removed th { color: #a40e26 !important; text-decoration: line-through; background-color: #ffeef0 !important; }
 
-        /* GitHub-style left accent for modified rows — a scannable signal
-           that a row has any change, without tinting the whole row (which
-           would fight the inline cell highlights). Inset box-shadow keeps
-           the layout from shifting. */
-        .diff-modified th { box-shadow: inset 3px 0 0 0 #d4a72c; }
-
-        /* Cell-level gutter accent for dissimilar swaps — when the old
-           and new strings share so little structure that per-character
-           diff is meaningless, the renderer falls back to plain old + new
-           and paints this gutter so the swap still reads as a flagged
-           change at a glance. */
-        td.cell-dissimilar, th.cell-dissimilar {
-            box-shadow: inset 3px 0 0 0 #d4a72c;
+        /* Yellow left-gutter accent for changed rows / dissimilar swaps.
+           Rendered as a positioned ::before so consecutive accented rows
+           have clean visual breaks at the row boundary (an inset
+           box-shadow would span the full cell height and the borders
+           between rows are subtle enough that adjacent gutters look like
+           one continuous bar). The top/bottom 4px inset leaves the gap.
+           — .diff-modified th: scannable "this row changed" indicator
+             for non-changes-only views (no fight with inline highlights).
+           — .cell-dissimilar: cell-level marker when inlineDiff falls
+             back to plain new-only because the old/new strings share
+             too little structure for char-diff to be meaningful. */
+        td.cell-dissimilar { position: relative; }
+        .diff-modified th::before,
+        td.cell-dissimilar::before,
+        th.cell-dissimilar::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 4px;
+            bottom: 4px;
+            width: 3px;
+            background: #d4a72c;
+            pointer-events: none;
         }
 
         /* Modified cells rely on the inline old/new colours to signal the
@@ -686,19 +696,19 @@ JS_TEMPLATE = Template("""
             else equalCount++;
         }
 
-        // Add-only or delete-only: use character-level diff with unified view.
-        // Merge consecutive same-op characters into a single span so a fully
-        // deleted/added word renders as one strikethrough block instead of
-        // a row of per-character pills (CSS padding makes those look ugly).
-        if (!(charHasInsert && charHasDelete)) {
-            let unifiedHtml = '';
+        // Build a unified inline rendering from char-level ops. Equal chars
+        // are plain text; deletes get a pink pill, inserts get a green pill.
+        // Consecutive same-op chars are merged into one span so a fully
+        // deleted/added run renders as one block instead of per-char pills.
+        function buildUnifiedHtml() {
+            let html = '';
             let buf = '';
             let bufOp = null;
             const flush = () => {
                 if (!buf) return;
-                if (bufOp === 'equal') unifiedHtml += esc(buf);
-                else if (bufOp === 'delete') unifiedHtml += '<span class="hi-del">' + esc(buf) + '</span>';
-                else unifiedHtml += '<span class="hi-add">' + esc(buf) + '</span>';
+                if (bufOp === 'equal') html += esc(buf);
+                else if (bufOp === 'delete') html += '<span class="hi-del">' + esc(buf) + '</span>';
+                else html += '<span class="hi-add">' + esc(buf) + '</span>';
                 buf = '';
                 bufOp = null;
             };
@@ -708,8 +718,13 @@ JS_TEMPLATE = Template("""
                 buf += op === 'insert' ? b[ni] : a[oi];
             }
             flush();
+            return html;
+        }
+
+        // Add-only or delete-only: unified view.
+        if (!(charHasInsert && charHasDelete)) {
             const mode = charHasDelete ? 'unified-del' : 'unified-add';
-            return { oldHtml: '', newHtml: '', unifiedHtml, mode };
+            return { oldHtml: '', newHtml: '', unifiedHtml: buildUnifiedHtml(), mode };
         }
 
         // Similarity gate: when the two strings barely overlap, char- or
@@ -727,32 +742,13 @@ JS_TEMPLATE = Template("""
         }
 
         // Identifier-like strings (no whitespace, e.g. SCH net names like
-        // CP10B_CMN0_REFCLK_DN vs CP10G_CMN0_REFCLK_DN) — word-level splits
-        // into a single token and would highlight the whole string. Reuse
-        // the char-level ops for finer-grained split view.
+        // CP10B_CMN0_REFCLK_DN vs CP10G_CMN0_REFCLK_DN). Render as a single
+        // unified line: equal chars plain, the differing run shown as pink
+        // delete + green insert pills adjacent. Much more compact than the
+        // two-line old/new split when the change is localized.
         if (!/\\s/.test(a) && !/\\s/.test(b)) {
-            let oldHtml = '', newHtml = '';
-            let oldBuf = '', newBuf = '', bufOp = null;
-            const flushSplit = () => {
-                if (bufOp === 'equal') {
-                    oldHtml += esc(oldBuf);
-                    newHtml += esc(newBuf);
-                } else if (bufOp === 'delete') {
-                    oldHtml += '<span class="hi">' + esc(oldBuf) + '</span>';
-                } else if (bufOp === 'insert') {
-                    newHtml += '<span class="hi">' + esc(newBuf) + '</span>';
-                }
-                oldBuf = ''; newBuf = ''; bufOp = null;
-            };
-            for (const [op, oi, ni] of charOps) {
-                if (op !== bufOp) flushSplit();
-                bufOp = op;
-                if (op === 'equal') { oldBuf += a[oi]; newBuf += b[ni]; }
-                else if (op === 'delete') oldBuf += a[oi];
-                else newBuf += b[ni];
-            }
-            flushSplit();
-            return { oldHtml, newHtml, unifiedHtml: '', mode: 'split' };
+            return { oldHtml: '', newHtml: '',
+                     unifiedHtml: buildUnifiedHtml(), mode: 'unified-mod' };
         }
 
         // Mixed changes with whitespace (prose): word-level split view.
@@ -904,11 +900,21 @@ JS_TEMPLATE = Template("""
                 let cellCls = '';
                 if (status === 'modified' && c && p && String(c[col] ?? '') !== String(p[col] ?? '')) {
                     const d = inlineDiff(p[col], c[col]);
-                    cell = d.mode.startsWith('unified')
-                        ? '<span class="diff-unified-inline">' + d.unifiedHtml + '</span>'
-                        : '<span class="diff-old">' + d.oldHtml + '</span><span class="diff-new">' + d.newHtml + '</span>';
-                    cellCls = ' cell-modified';
-                    if (d.dissimilar) cellCls += ' cell-dissimilar';
+                    if (d.dissimilar) {
+                        // Dissimilar swap: the old and new strings share so
+                        // little that showing both inline just clutters the
+                        // cell (and the new value often gets truncated). Show
+                        // only the new value; the side panel still has the
+                        // full before/after, and the yellow gutter signals
+                        // "this cell changed".
+                        cell = cVal;
+                        cellCls = ' cell-modified cell-dissimilar';
+                    } else {
+                        cell = d.mode.startsWith('unified')
+                            ? '<span class="diff-unified-inline">' + d.unifiedHtml + '</span>'
+                            : '<span class="diff-old">' + d.oldHtml + '</span><span class="diff-new">' + d.newHtml + '</span>';
+                        cellCls = ' cell-modified';
+                    }
                 } else {
                     cell = esc(item[col]);
                 }
