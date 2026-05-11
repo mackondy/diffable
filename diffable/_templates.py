@@ -277,8 +277,20 @@ STYLE = """
         .diff-added:hover { background-color: #d2fbe0 !important; }
         .diff-added:hover th { background-color: #d2fbe0 !important; }
 
-        .diff-removed { background-color: #ffeef0 !important; color: #a40e26 !important; cursor: not-allowed; }
-        .diff-removed td, .diff-removed th { color: #a40e26 !important; text-decoration: line-through; background-color: #ffeef0 !important; }
+        /* Removed rows: pink bg only, mirroring how added rows just get a
+           green bg. The earlier red strikethrough on every cell was
+           visually heavier than any other row type and made the column
+           data hard to read. Bg colour alone is enough signal — same
+           pattern as GitHub's "removed line" treatment. */
+        .diff-removed { background-color: #ffeef0 !important; }
+        .diff-removed td, .diff-removed th { background-color: #ffeef0 !important; }
+
+        /* Value that was present and is now empty. Strikethrough conveys
+           "removed" universally; we keep the text in the default colour
+           (no red) so it doesn't read as alarming. Slight opacity nudges
+           it toward "faded". The yellow gutter still does the "this cell
+           changed" job. */
+        .cell-removed-value { text-decoration: line-through; opacity: 0.7; }
 
         /* Yellow left-gutter accent for changed rows / dissimilar swaps.
            Rendered as a positioned ::before so consecutive accented rows
@@ -324,11 +336,6 @@ STYLE = """
         .diff-unified .hi-del, .diff-unified-inline .hi-del { background-color: #fdb8c0; border-radius: 2px; padding: 1px 2px; color: #a40e26; text-decoration: line-through; }
         .diff-unified .hi-add, .diff-unified-inline .hi-add { background-color: #acf2bd; border-radius: 2px; padding: 1px 2px; font-weight: 600; color: #176f2c; }
 
-        /* Cell went from value → empty (or the reverse). No pill — a row
-           of saturated pills looks alarming when the diff is really
-           just "this cell was cleared". */
-        .diff-cleared { color: #a40e26; text-decoration: line-through; opacity: 0.65; }
-        .diff-filled  { color: #176f2c; font-weight: 500; }
 
         /* --- Side panel --- */
         .detail-panel {
@@ -670,19 +677,17 @@ JS_TEMPLATE = Template("""
     function inlineDiff(oldStr, newStr) {
         const a = String(oldStr ?? ''), b = String(newStr ?? '');
 
-        // Fast path: one side is empty. Render the non-empty side with
-        // muted strikethrough / muted green instead of a saturated pill —
-        // a row of pink "deleted" pills looks alarming when the diff is
-        // really "cell was just cleared".
+        // Fast path: one side is empty. Treat as a dissimilar swap so the
+        // cell renderer shows whichever side has data (the gutter accent
+        // is the "this cell changed" signal, the side panel carries the
+        // full before/after).
         if (a && !b) {
-            return { oldHtml: '', newHtml: '',
-                     unifiedHtml: '<span class="diff-cleared">' + esc(a) + '</span>',
-                     mode: 'unified-del' };
+            return { oldHtml: esc(a), newHtml: '',
+                     unifiedHtml: '', mode: 'split', dissimilar: true };
         }
         if (!a && b) {
-            return { oldHtml: '', newHtml: '',
-                     unifiedHtml: '<span class="diff-filled">' + esc(b) + '</span>',
-                     mode: 'unified-add' };
+            return { oldHtml: '', newHtml: esc(b),
+                     unifiedHtml: '', mode: 'split', dissimilar: true };
         }
 
         // First pass: character-level diff. Track op presence and the
@@ -901,13 +906,17 @@ JS_TEMPLATE = Template("""
                 if (status === 'modified' && c && p && String(c[col] ?? '') !== String(p[col] ?? '')) {
                     const d = inlineDiff(p[col], c[col]);
                     if (d.dissimilar) {
-                        // Dissimilar swap: the old and new strings share so
-                        // little that showing both inline just clutters the
-                        // cell (and the new value often gets truncated). Show
-                        // only the new value; the side panel still has the
-                        // full before/after, and the yellow gutter signals
-                        // "this cell changed".
-                        cell = cVal;
+                        // Dissimilar swap or value↔empty. Cell shows whichever
+                        // side has data; yellow gutter signals "this cell
+                        // changed". For value→empty we wrap the old value in
+                        // .cell-removed-value (strikethrough, no colour) so
+                        // it reads as "this value was here, now gone" without
+                        // the heavy red look. Side panel has the full diff.
+                        if (cVal === '' && pVal !== '') {
+                            cell = '<span class="cell-removed-value">' + pVal + '</span>';
+                        } else {
+                            cell = cVal || pVal;
+                        }
                         cellCls = ' cell-modified cell-dissimilar';
                     } else {
                         cell = d.mode.startsWith('unified')
