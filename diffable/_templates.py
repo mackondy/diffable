@@ -958,8 +958,14 @@ JS_TEMPLATE = Template("""
                 if (status === 'modified' && c && p && String(c[col] ?? '') !== String(p[col] ?? '')) {
                     const d = inlineDiff(p[col], c[col]);
                     if (d.dissimilar) {
-                        // value↔empty cases get a cell-level tint that
-                        // mirrors the row-level .diff-added / .diff-removed.
+                        // value↔empty: show the surviving side as a pill
+                        // (matches the row-level diff-added / diff-removed
+                        // colour family).
+                        // value→value swap (sim < 0.7): both sides are
+                        // non-empty but share too little structure for
+                        // inline marks. Wrap the new value in the green
+                        // pill so the cell signals "changed" at a glance;
+                        // the side panel still has the full before/after.
                         if (cVal === '' && pVal !== '') {
                             cell = '<span class="cell-removed-value">' + pVal + '</span>';
                             cellCls = ' cell-modified cell-removed';
@@ -967,7 +973,7 @@ JS_TEMPLATE = Template("""
                             cell = '<span class="cell-added-value">' + cVal + '</span>';
                             cellCls = ' cell-modified cell-added';
                         } else {
-                            cell = cVal || pVal;
+                            cell = '<span class="cell-added-value">' + cVal + '</span>';
                             cellCls = ' cell-modified';
                         }
                     } else {
