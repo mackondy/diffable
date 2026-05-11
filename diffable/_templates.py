@@ -184,9 +184,9 @@ STYLE = """
             padding: 4px 10px;
             border-radius: 6px;
         }
-        .status-tag.tag-added    { background: #DCFCE7; color: #15803D; }
-        .status-tag.tag-removed  { background: #FFE4E6; color: #BE123C; }
-        .status-tag.tag-modified { background: #FEF3C7; color: #A16207; }
+        .status-tag.tag-added    { background: #D9F1D8; color: #1E7E2C; }
+        .status-tag.tag-removed  { background: #FFE0DC; color: #C40D1F; }
+        .status-tag.tag-modified { background: #FFF5CC; color: #946100; }
 
         table {
             width: 100%;
@@ -270,18 +270,18 @@ STYLE = """
             border-radius: 2px;
         }
 
-        .diff-added { background-color: #DCFCE7 !important; }
-        .diff-added th { background-color: #DCFCE7 !important; }
-        .diff-added:hover { background-color: #BBF7D0 !important; }
-        .diff-added:hover th { background-color: #BBF7D0 !important; }
+        .diff-added { background-color: #D9F1D8 !important; }
+        .diff-added th { background-color: #D9F1D8 !important; }
+        .diff-added:hover { background-color: #BFE5BE !important; }
+        .diff-added:hover th { background-color: #BFE5BE !important; }
 
         /* Removed rows: pink bg only, mirroring how added rows just get a
            green bg. The earlier red strikethrough on every cell was
            visually heavier than any other row type and made the column
            data hard to read. Bg colour alone is enough signal — same
            pattern as GitHub's "removed line" treatment. */
-        .diff-removed { background-color: #FFE4E6 !important; }
-        .diff-removed td, .diff-removed th { background-color: #FFE4E6 !important; }
+        .diff-removed { background-color: #FFE0DC !important; }
+        .diff-removed td, .diff-removed th { background-color: #FFE0DC !important; }
 
         /* Three-colour palette at cell scope, matching the row-level
            treatment one rung up:
@@ -295,26 +295,26 @@ STYLE = """
              empty → value (.cell-added-value):   bold green text
              value → empty (.cell-removed-value): strikethrough + 0.7 opacity
            Together: scan the column for tint, read the value for detail. */
-        td.cell-modified, th.cell-modified { background-color: #FEF3C7; }
-        td.cell-added,    th.cell-added    { background-color: #DCFCE7; }
-        td.cell-removed,  th.cell-removed  { background-color: #FFE4E6; }
-        .cell-removed-value { color: #DC2626; font-weight: 700; text-decoration: line-through; }
-        .cell-added-value   { color: #16A34A; font-weight: 700; }
+        td.cell-modified, th.cell-modified { background-color: #FFF5CC; }
+        td.cell-added,    th.cell-added    { background-color: #D9F1D8; }
+        td.cell-removed,  th.cell-removed  { background-color: #FFE0DC; }
+        .cell-removed-value { color: #C40D1F; text-decoration: line-through; text-decoration-thickness: 1px; }
+        .cell-added-value   { color: #1E7E2C; font-weight: 700; }
 
         /* --- Inline diff marks ---
-           Pure typographic marks (no pill fills): clean red + strikethrough
-           for deletions, clean green + semibold for additions. Bright
-           hues over the bright pastel cell tints feel fresh and cheerful
-           (Pages / iWork accent palette) rather than dusty/boutique. */
+           Pure typographic marks (no pill fills): deep tomato + strikethrough
+           for deletions, deep grass + semibold for additions. Hues from the
+           Apple iWork accent palette family — slightly warmer than the
+           Tailwind shades; reads as cheerful Apple, not dev-tool. */
         .diff-unified .hi-del, .diff-unified-inline .hi-del,
         .diff-old .hi, .diff-line-old .hi {
-            color: #DC2626;
+            color: #C40D1F;
             text-decoration: line-through;
             text-decoration-thickness: 1px;
         }
         .diff-unified .hi-add, .diff-unified-inline .hi-add,
         .diff-new .hi, .diff-line-new .hi {
-            color: #16A34A;
+            color: #1E7E2C;
             font-weight: 600;
         }
 
@@ -329,8 +329,8 @@ STYLE = """
            the specific change without their own fill. */
         .diff-block { display: flex; flex-direction: column; gap: 8px; }
         .diff-line { padding: 8px 12px; border-radius: 6px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
-        .diff-line-old { background-color: #FFF1F2; color: #1d1d1f; }
-        .diff-line-new { background-color: #F0FDF4; color: #1d1d1f; }
+        .diff-line-old { background-color: #FFF1EE; color: #1d1d1f; }
+        .diff-line-new { background-color: #EFF8EF; color: #1d1d1f; }
 
         /* Unified-mode block in side panel (fully deleted / added value,
            not split into old/new lines). Single muted background. */
