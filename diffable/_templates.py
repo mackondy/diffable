@@ -283,16 +283,21 @@ STYLE = """
         .diff-removed { background-color: #ffeef0 !important; }
         .diff-removed td, .diff-removed th { background-color: #ffeef0 !important; }
 
-        /* Cell-level tints for the empty↔value cases — symmetric with
-           the row-level .diff-added / .diff-removed: a previously-empty
-           cell now filled gets the same green wash as a newly-added row,
-           and value→empty gets the same pink. The inner value spans
-           carry the typographic semantics on top:
-             value → empty (.cell-removed-value): strikethrough + 0.7 opacity
+        /* Three-colour palette at cell scope, matching the row-level
+           treatment one rung up:
+             modified         (value → different value)   light yellow
+             added   (.cell-added,    empty → value)      light green
+             removed (.cell-removed,  value → empty)      light pink
+           cell-modified is the base; the .cell-added / .cell-removed
+           sub-rules below override it for the empty↔value cases (they
+           come after, so equal specificity → last one wins). The inner
+           value spans then carry the typographic semantics on top:
              empty → value (.cell-added-value):   bold green text
+             value → empty (.cell-removed-value): strikethrough + 0.7 opacity
            Together: scan the column for tint, read the value for detail. */
-        td.cell-added,   th.cell-added   { background-color: #e6ffed; }
-        td.cell-removed, th.cell-removed { background-color: #ffeef0; }
+        td.cell-modified, th.cell-modified { background-color: #fffbe6; }
+        td.cell-added,    th.cell-added    { background-color: #e6ffed; }
+        td.cell-removed,  th.cell-removed  { background-color: #ffeef0; }
         .cell-removed-value { text-decoration: line-through; opacity: 0.7; }
         .cell-added-value   { color: #1f7e3a; font-weight: 700; }
 
