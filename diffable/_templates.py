@@ -287,10 +287,13 @@ STYLE = """
         /* Modified cells stay on the default cell bg — the inline pink/
            green pills on the diff marks are enough signal without a
            cell-level tint adding a third colour to the mix. For value↔
-           empty cases the inner span renders as a GitHub-style pill so
-           it matches the inline .hi-add / .hi-del rendering elsewhere:
-             empty → value (.cell-added-value):   green pill
-             value → empty (.cell-removed-value): pink pill */
+           empty / dissimilar-swap cases the inner span renders as a
+           GitHub-style pill so it matches the inline .hi-add / .hi-del
+           rendering elsewhere:
+             empty → value      (.cell-added-value):   green pill
+             value → empty      (.cell-removed-value): pink pill
+             value → other value (.cell-swap-value):   yellow pill
+                  (the swap case — neither pure-add nor pure-remove) */
         .cell-removed-value {
             background-color: #fdb8c0;
             color: #82071e;
@@ -300,6 +303,13 @@ STYLE = """
         .cell-added-value {
             background-color: #abf2bc;
             color: #044f1e;
+            font-weight: 600;
+            border-radius: 2px;
+            padding: 0 2px;
+        }
+        .cell-swap-value {
+            background-color: #fff5b5;
+            color: #735c0f;
             font-weight: 600;
             border-radius: 2px;
             padding: 0 2px;
@@ -963,9 +973,10 @@ JS_TEMPLATE = Template("""
                         // colour family).
                         // value→value swap (sim < 0.7): both sides are
                         // non-empty but share too little structure for
-                        // inline marks. Wrap the new value in the green
-                        // pill so the cell signals "changed" at a glance;
-                        // the side panel still has the full before/after.
+                        // inline marks. Wrap the new value in a yellow
+                        // pill — neither an add nor a remove, semantically
+                        // a swap — and let the side panel carry the full
+                        // pink-old / green-new before/after.
                         if (cVal === '' && pVal !== '') {
                             cell = '<span class="cell-removed-value">' + pVal + '</span>';
                             cellCls = ' cell-modified cell-removed';
@@ -973,7 +984,7 @@ JS_TEMPLATE = Template("""
                             cell = '<span class="cell-added-value">' + cVal + '</span>';
                             cellCls = ' cell-modified cell-added';
                         } else {
-                            cell = '<span class="cell-added-value">' + cVal + '</span>';
+                            cell = '<span class="cell-swap-value">' + cVal + '</span>';
                             cellCls = ' cell-modified';
                         }
                     } else {
