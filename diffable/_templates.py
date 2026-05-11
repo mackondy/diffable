@@ -302,13 +302,13 @@ STYLE = """
            to read as one palette family with the cell-level treatment. */
         .diff-unified .hi-del, .diff-unified-inline .hi-del,
         .diff-old .hi, .diff-line-old .hi {
-            background-color: #fec1bf;
+            background-color: #fdbab7;
             border-radius: 2px;
             padding: 0 2px;
         }
         .diff-unified .hi-add, .diff-unified-inline .hi-add,
         .diff-new .hi, .diff-line-new .hi {
-            background-color: #b9f2c5;
+            background-color: #aeefbc;
             border-radius: 2px;
             padding: 0 2px;
         }
