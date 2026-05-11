@@ -728,10 +728,42 @@ JS_TEMPLATE = Template("""
             return html;
         }
 
-        // Add-only or delete-only: unified view.
+        // Build a split (old / new) char-level rendering. Same char-ops,
+        // emit each delete on the old side and each insert on the new
+        // side, with consecutive same-op chars merged into one .hi span.
+        function buildSplitHtml() {
+            let oldHtml = '', newHtml = '';
+            let oldBuf = '', newBuf = '', op_ = null;
+            const flush = () => {
+                if (op_ === 'equal') {
+                    oldHtml += esc(oldBuf);
+                    newHtml += esc(newBuf);
+                } else if (op_ === 'delete') {
+                    oldHtml += '<span class="hi">' + esc(oldBuf) + '</span>';
+                } else if (op_ === 'insert') {
+                    newHtml += '<span class="hi">' + esc(newBuf) + '</span>';
+                }
+                oldBuf = ''; newBuf = ''; op_ = null;
+            };
+            for (const [op, oi, ni] of charOps) {
+                if (op !== op_) flush();
+                op_ = op;
+                if (op === 'equal') { oldBuf += a[oi]; newBuf += b[ni]; }
+                else if (op === 'delete') oldBuf += a[oi];
+                else newBuf += b[ni];
+            }
+            flush();
+            return { oldHtml, newHtml };
+        }
+
+        // Add-only or delete-only: build BOTH renderings (the cell uses the
+        // compact unified one; the side panel can use the before/after
+        // split since it has room for two rows and is the easier place
+        // to copy from).
         if (!(charHasInsert && charHasDelete)) {
             const mode = charHasDelete ? 'unified-del' : 'unified-add';
-            return { oldHtml: '', newHtml: '', unifiedHtml: buildUnifiedHtml(), mode };
+            const { oldHtml, newHtml } = buildSplitHtml();
+            return { oldHtml, newHtml, unifiedHtml: buildUnifiedHtml(), mode };
         }
 
         // Similarity gate: when the two strings barely overlap, char- or
@@ -751,30 +783,9 @@ JS_TEMPLATE = Template("""
         // Identifier-like strings (no whitespace, e.g. SCH net names like
         // CP10B_CMN0_REFCLK_DN vs CP10G_CMN0_REFCLK_DN). Build BOTH the
         // unified char-level rendering (used in the compact cell view)
-        // and a split before/after rendering (used in the side panel
-        // where there's space for two rows and easier copy-paste).
+        // and a split before/after rendering (used in the side panel).
         if (!/\\s/.test(a) && !/\\s/.test(b)) {
-            let oldHtml = '', newHtml = '';
-            let oldBuf = '', newBuf = '', splitOp = null;
-            const flushSplit = () => {
-                if (splitOp === 'equal') {
-                    oldHtml += esc(oldBuf);
-                    newHtml += esc(newBuf);
-                } else if (splitOp === 'delete') {
-                    oldHtml += '<span class="hi">' + esc(oldBuf) + '</span>';
-                } else if (splitOp === 'insert') {
-                    newHtml += '<span class="hi">' + esc(newBuf) + '</span>';
-                }
-                oldBuf = ''; newBuf = ''; splitOp = null;
-            };
-            for (const [op, oi, ni] of charOps) {
-                if (op !== splitOp) flushSplit();
-                splitOp = op;
-                if (op === 'equal') { oldBuf += a[oi]; newBuf += b[ni]; }
-                else if (op === 'delete') oldBuf += a[oi];
-                else newBuf += b[ni];
-            }
-            flushSplit();
+            const { oldHtml, newHtml } = buildSplitHtml();
             return { oldHtml, newHtml,
                      unifiedHtml: buildUnifiedHtml(), mode: 'unified-mod' };
         }
@@ -1004,11 +1015,11 @@ JS_TEMPLATE = Template("""
 
         if (cellChanged) {
             const d = inlineDiff(pVal, cVal);
-            // For unified-mod (no-whitespace mixed change), the cell shows
-            // the compact one-line view but the panel has room for the
-            // before/after split — easier to read and easier to copy.
-            // Pure unified-del / unified-add still render as one block.
-            if (d.mode === 'unified-mod' && d.oldHtml && d.newHtml) {
+            // For any unified-* mode where we have both halves of the
+            // split rendering, prefer the before/after view in the side
+            // panel — the cell stays compact, but the panel has room
+            // for two rows which are easier to read and easier to copy.
+            if (d.mode.startsWith('unified') && d.oldHtml && d.newHtml) {
                 html += '<div class="detail-section"><div class="detail-label">' + esc(colLabel) + '</div>'
                     + '<div class="detail-value"><div class="diff-block">'
                     + '<div class="diff-line diff-line-old">' + d.oldHtml + '</div>'
