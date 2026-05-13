@@ -690,7 +690,8 @@ JS_TEMPLATE = Template("""
         // First pass: character-level diff. Track op presence and the
         // length of the longest common subsequence (count of 'equal' ops),
         // which we'll use as a similarity score below.
-        const charOps = lcsOps(a.split(''), b.split(''));
+        let aArr = a.split(''), bArr = b.split('');
+        let charOps = lcsOps(aArr, bArr);
         let charHasInsert = false, charHasDelete = false, equalCount = 0;
         for (const [op] of charOps) {
             if (op === 'delete') charHasDelete = true;
@@ -698,10 +699,32 @@ JS_TEMPLATE = Template("""
             else equalCount++;
         }
 
-        // Build a unified inline rendering from char-level ops. Equal chars
-        // are plain text; deletes get a pink pill, inserts get a green pill.
-        // Consecutive same-op chars are merged into one span so a fully
-        // deleted/added run renders as one block instead of per-char pills.
+        // Pure add or delete on a structured value ("2kΩ,4.7kΩ" → "2kΩ"):
+        // char-level LCS can align the matched chars with the *trailing*
+        // copy of "kΩ" instead of the leading one, leaving a scattered
+        // "kΩ,4.7" highlight in the middle. Re-tokenize on commas and
+        // whitespace so the diff lands on natural boundaries — the
+        // trailing ",4.7kΩ" becomes one clean delete span. Token order is
+        // preserved, so a pure add/delete stays pure at the token level.
+        const SEP_RE = /([,\s]+)/;
+        if (!(charHasInsert && charHasDelete) && (SEP_RE.test(a) || SEP_RE.test(b))) {
+            const aTok = a.split(SEP_RE);
+            const bTok = b.split(SEP_RE);
+            const tokOps = lcsOps(aTok, bTok);
+            aArr = aTok;
+            bArr = bTok;
+            charOps = tokOps;
+            // charHasInsert / charHasDelete unchanged: a pure op at the
+            // char level is still pure at the token level since order is
+            // preserved. equalCount becomes a token count, not a char
+            // count, but we only reach the similarity gate below in the
+            // mixed-op path, which this branch skips entirely.
+        }
+
+        // Build a unified inline rendering from the chosen ops. Equal
+        // tokens are plain text; deletes get a pink pill, inserts get a
+        // green pill. Consecutive same-op tokens are merged into one
+        // span so a fully deleted/added run renders as one block.
         function buildUnifiedHtml() {
             let html = '';
             let buf = '';
@@ -717,15 +740,15 @@ JS_TEMPLATE = Template("""
             for (const [op, oi, ni] of charOps) {
                 if (op !== bufOp) flush();
                 bufOp = op;
-                buf += op === 'insert' ? b[ni] : a[oi];
+                buf += op === 'insert' ? bArr[ni] : aArr[oi];
             }
             flush();
             return html;
         }
 
-        // Build a split (old / new) char-level rendering. Same char-ops,
-        // emit each delete on the old side and each insert on the new
-        // side, with consecutive same-op chars merged into one .hi span.
+        // Build a split (old / new) rendering. Same ops, emit each delete
+        // on the old side and each insert on the new side, with
+        // consecutive same-op tokens merged into one .hi span.
         function buildSplitHtml() {
             let oldHtml = '', newHtml = '';
             let oldBuf = '', newBuf = '', op_ = null;
@@ -743,9 +766,9 @@ JS_TEMPLATE = Template("""
             for (const [op, oi, ni] of charOps) {
                 if (op !== op_) flush();
                 op_ = op;
-                if (op === 'equal') { oldBuf += a[oi]; newBuf += b[ni]; }
-                else if (op === 'delete') oldBuf += a[oi];
-                else newBuf += b[ni];
+                if (op === 'equal') { oldBuf += aArr[oi]; newBuf += bArr[ni]; }
+                else if (op === 'delete') oldBuf += aArr[oi];
+                else newBuf += bArr[ni];
             }
             flush();
             return { oldHtml, newHtml };
