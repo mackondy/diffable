@@ -1081,6 +1081,10 @@ JS_TEMPLATE = Template("""
         if (rowStatus !== 'unchanged') {
             panelTitle.innerHTML = '<span class="status-tag ' + TAG_CLASSES[rowStatus] + '">'
                 + TAG_LABELS[rowStatus] + '</span>';
+        } else if (!window._diffState.prev) {
+            // First version: there's no prior to compare against, so
+            // "No change" misrepresents the state. Tag as Baseline.
+            panelTitle.innerHTML = '<span class="status-tag" style="background:#f0f0f5;color:#86868b">Baseline</span>';
         } else {
             panelTitle.innerHTML = '<span class="status-tag" style="background:#f0f0f5;color:#86868b">No change</span>';
         }
