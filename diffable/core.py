@@ -433,7 +433,12 @@ class DiffTable:
         return out_path
 
     def _render(self, versions, data_key, key, display_cols):
-        if self.changes_only:
+        # Skip diff-stripping when there's nothing to diff against:
+        # _build_diff_only_versions filters the first version's data to
+        # rows that change *somewhere downstream*, which is the empty
+        # set with a single version — and an empty table is not what
+        # the caller wants.
+        if self.changes_only and len(versions) > 1:
             versions = _build_diff_only_versions(versions, data_key, key,
                                                  note_field=self.note_field)
 
