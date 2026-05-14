@@ -565,6 +565,15 @@ JS_TEMPLATE = Template("""
     const VERSIONS     = $VERSIONS;
     const CHANGES_ONLY = $CHANGES_ONLY;
 
+    // Single-version docs: no time-machine UI. Hide the version
+    // dropdown and the "Changes only" toggle since neither has any
+    // meaning without a prior revision to traverse to. The rail is
+    // already gated by TL_MIN_TICKS below.
+    if (VERSIONS.length <= 1) {
+        document.querySelectorAll('.version-control, .toggle-control')
+            .forEach(el => el.style.display = 'none');
+    }
+
     let activeCell = null;
     let changesOnly = true;
 
@@ -706,7 +715,7 @@ JS_TEMPLATE = Template("""
         // whitespace so the diff lands on natural boundaries — the
         // trailing ",4.7kΩ" becomes one clean delete span. Token order is
         // preserved, so a pure add/delete stays pure at the token level.
-        const SEP_RE = /([,\s]+)/;
+        const SEP_RE = /([,\\s]+)/;
         if (!(charHasInsert && charHasDelete) && (SEP_RE.test(a) || SEP_RE.test(b))) {
             const aTok = a.split(SEP_RE);
             const bTok = b.split(SEP_RE);
@@ -1161,9 +1170,12 @@ JS_TEMPLATE = Template("""
 
     const TL_TEMPORAL_WEIGHT = 0.55;
     // The rail is the only revision selector when the dropdown is
-    // hidden (.header-bar.rail-active); render it whenever there's
-    // at least one tick. Hide only when there are zero.
-    const TL_MIN_TICKS = 1;
+    // hidden (.header-bar.rail-active); render it whenever there are
+    // at least two ticks. A one-tick rail is just visual noise — the
+    // "time machine" metaphor only makes sense with versions to
+    // traverse. Single-version docs fall back to the plain dropdown
+    // (and we also hide that below when it has nothing to pick from).
+    const TL_MIN_TICKS = 2;
 
     // Identify "major" versions whose labels stay visible at rest.
     //   1. The first version overall is always major.
