@@ -1090,6 +1090,10 @@ JS_TEMPLATE = Template("""
         if (rowStatus !== 'unchanged') {
             panelTitle.innerHTML = '<span class="status-tag ' + TAG_CLASSES[rowStatus] + '">'
                 + TAG_LABELS[rowStatus] + '</span>';
+        } else if (VERSIONS.length <= 1) {
+            // Single-version doc: no prior revision exists at all, so
+            // there's no diff context — "Baseline" is meaningless here.
+            panelTitle.textContent = 'Details';
         } else if (!window._diffState.prev) {
             // First version: there's no prior to compare against, so
             // "No change" misrepresents the state. Tag as Baseline.
