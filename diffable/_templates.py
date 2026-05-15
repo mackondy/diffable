@@ -1322,11 +1322,16 @@ JS_TEMPLATE = Template("""
             const labels = [{ year: firstY, month: firstM, snap: 0, tickI: firstTickI }];
             claim(0);
             if (!sameBoundary) claim(1);
-            // Natural intermediates — strictly between the two pins.
+            // Natural intermediates — strictly between the two pins,
+            // but only with 3+ versions. With exactly two, every
+            // in-between month snaps to one of the two endpoint ticks,
+            // so the rail fills with a long ladder of unclickable month
+            // labels (e.g. a 2021→2026 pair) that reads as noise — the
+            // two endpoint anchors alone already convey the span.
             let curY = firstY;
             let curM = firstM + 1;
             if (curM > 11) { curM = 0; curY++; }
-            while (curY < lastY || (curY === lastY && curM < lastM)) {
+            while (n > 2 && (curY < lastY || (curY === lastY && curM < lastM))) {
                 const monthStart = Date.UTC(curY, curM, 1) / 1000;
                 if (monthStart >= tsMin && monthStart <= tsMax) {
                     const temporalFromTop = (monthStart - tsMin) / range;
