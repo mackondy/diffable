@@ -270,18 +270,23 @@ STYLE = """
             border-radius: 2px;
         }
 
-        .diff-added { background-color: #D9F1D8 !important; }
-        .diff-added th { background-color: #D9F1D8 !important; }
-        .diff-added:hover { background-color: #BFE5BE !important; }
-        .diff-added:hover th { background-color: #BFE5BE !important; }
+        /* Added rows: vibrant minty green (GitHub's added-line family),
+           not the muted slate-green wash — a newly added row should read
+           as a fresh, saturated block at a glance. */
+        .diff-added { background-color: #e6ffed !important; }
+        .diff-added th { background-color: #e6ffed !important; }
+        .diff-added:hover { background-color: #d2fbe0 !important; }
+        .diff-added:hover th { background-color: #d2fbe0 !important; }
 
         /* Removed rows: pink bg only, mirroring how added rows just get a
            green bg. The earlier red strikethrough on every cell was
            visually heavier than any other row type and made the column
            data hard to read. Bg colour alone is enough signal — same
-           pattern as GitHub's "removed line" treatment. */
-        .diff-removed { background-color: #FFE0DC !important; }
-        .diff-removed td, .diff-removed th { background-color: #FFE0DC !important; }
+           pattern as GitHub's "removed line" treatment, and #ffeef0 is
+           GitHub's actual removed-line pink: the matched twin of the
+           #e6ffed added-row green. */
+        .diff-removed { background-color: #ffeef0 !important; }
+        .diff-removed td, .diff-removed th { background-color: #ffeef0 !important; }
 
 
         /* For the three "whole cell content changed" cases — empty→value,
