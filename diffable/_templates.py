@@ -549,6 +549,80 @@ STYLE = """
             .timeline-rail { display: none; }
             .header-bar.rail-active .version-control { display: flex; }
         }
+
+        /* ════════════════════════════════════════════════════════════
+           THEME: Refined  (ported from pycpld espi register tables)
+           Cool slate neutrals instead of warm grey, hairline borders,
+           ONE blue accent (blue-600) used only on interaction, tabular
+           numerals, and crisp ringed status chips. Vibrancy comes from
+           sharp accents on white, not tinted washes. Appended last so
+           each rule wins over its base twin by source order (selectors
+           re-declared at matching specificity).
+           Palette: Tailwind slate + blue-600.
+           ════════════════════════════════════════════════════════════ */
+        body {
+            background-color: #f8fafc;   /* slate-50: cool, not warm #f5f5f7 */
+            color: #0f172a;              /* slate-900 */
+        }
+
+        h1 { color: #0f172a; }
+
+        /* Card: hairline slate ring on the table + soft low shadow on the
+           scroll wrapper. The table is the scroll *content*, so a shadow
+           on it would be clipped by .table-scroll's overflow — lift the
+           wrapper instead, which paints its outset shadow into the
+           surrounding .main-content padding. */
+        table { border-color: #e2e8f0; }   /* slate-200 */
+        .table-scroll {
+            box-shadow:
+                0 1px 2px rgba(15, 23, 42, 0.04),
+                0 4px 12px -6px rgba(15, 23, 42, 0.10);
+        }
+
+        /* Header: slate label on a faint cool fill, hairline underline.
+           Sticky position/z-index inherited from the base rules. */
+        thead th {
+            background: #f8fafc;          /* slate-50 */
+            color: #64748b;              /* slate-500 */
+            border-bottom: 1px solid #e2e8f0;
+        }
+        thead th:first-child { border-right: 1px solid #eef2f6; }
+
+        /* Index rail de-greyed to white; tabular numerals so digits align. */
+        tbody th {
+            background-color: #ffffff;
+            color: #64748b;              /* slate-500 */
+            font-variant-numeric: tabular-nums;
+            border-right: 1px solid #f1f5f9;   /* slate-100 */
+            border-bottom: 1px solid #f1f5f9;
+        }
+        td {
+            color: #334155;              /* slate-700 */
+            border-bottom: 1px solid #f1f5f9;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Whisper zebra + slate hover, re-declared at the base selectors'
+           matching specificity (including the sticky-th twin) so they
+           beat the warm greys above. */
+        tbody tr:nth-child(even):not(.diff-added):not(.diff-removed) { background-color: #fafbfc; }
+        tbody tr:nth-child(even):not(.diff-added):not(.diff-removed) th { background-color: #fafbfc; }
+        tbody tr:hover:not(.diff-removed):not(.spacer-row) { background-color: #f1f5f9; }
+        tbody tr:hover:not(.diff-removed):not(.spacer-row) th { background-color: #f1f5f9; }
+
+        /* Active cell: precise blue-600 ring (offset/-radius from base). */
+        tbody td.cell-active, tbody th.cell-active { outline: 2px solid #2563eb; }
+        /* Vertical accent bar on the left edge of the selected row — the
+           row holding the active cell carries .row-active (see JS). Drawn
+           as an inset shadow on the sticky key cell so it adds no width
+           and rides along when the table scrolls horizontally. box-shadow
+           never collides with the zebra/hover background rules. */
+        tbody tr.row-active th { box-shadow: inset 3px 0 0 #2563eb; }   /* blue-600 */
+
+        /* Status chips: tinted fill + hairline ring (GitHub / Linear). */
+        .status-tag.tag-added    { background: #ecfdf5; color: #047857; box-shadow: inset 0 0 0 1px #a7f3d0; }
+        .status-tag.tag-removed  { background: #fef2f2; color: #b91c1c; box-shadow: inset 0 0 0 1px #fecaca; }
+        .status-tag.tag-modified { background: #fffbeb; color: #b45309; box-shadow: inset 0 0 0 1px #fde68a; }
 """
 
 JS_TEMPLATE = Template("""
@@ -613,14 +687,27 @@ JS_TEMPLATE = Template("""
     function closePanel() {
         document.getElementById('detail-panel').classList.remove('open');
         tableScroll.classList.remove('panel-open');
-        if (activeCell) { activeCell.classList.remove('cell-active'); activeCell = null; }
+        if (activeCell) {
+            activeCell.classList.remove('cell-active');
+            const row = activeCell.closest('tr');
+            if (row) row.classList.remove('row-active');
+            activeCell = null;
+        }
     }
     window.closePanel = closePanel;
 
     function setActiveCell(cell) {
         if (!cell || cell.closest('tr').classList.contains('diff-removed')) return;
-        if (activeCell) activeCell.classList.remove('cell-active');
+        if (activeCell) {
+            activeCell.classList.remove('cell-active');
+            const prevRow = activeCell.closest('tr');
+            if (prevRow) prevRow.classList.remove('row-active');
+        }
         cell.classList.add('cell-active');
+        // Mark the whole row so the left-edge accent bar (CSS .row-active)
+        // anchors the selection across a wide, horizontally-scrolled table.
+        const row = cell.closest('tr');
+        if (row) row.classList.add('row-active');
         activeCell = cell;
     }
 
@@ -1097,9 +1184,9 @@ JS_TEMPLATE = Template("""
         } else if (!window._diffState.prev) {
             // First version: there's no prior to compare against, so
             // "No change" misrepresents the state. Tag as Baseline.
-            panelTitle.innerHTML = '<span class="status-tag" style="background:#f0f0f5;color:#86868b">Baseline</span>';
+            panelTitle.innerHTML = '<span class="status-tag" style="background:#f1f5f9;color:#64748b;box-shadow:inset 0 0 0 1px #e2e8f0">Baseline</span>';
         } else {
-            panelTitle.innerHTML = '<span class="status-tag" style="background:#f0f0f5;color:#86868b">No change</span>';
+            panelTitle.innerHTML = '<span class="status-tag" style="background:#f1f5f9;color:#64748b;box-shadow:inset 0 0 0 1px #e2e8f0">No change</span>';
         }
         document.getElementById('panel-body').innerHTML = html;
         openPanel();
