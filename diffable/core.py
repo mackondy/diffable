@@ -312,11 +312,17 @@ class DiffTable:
         sticky first column. Set False to match rows on the key without
         displaying it — e.g. when identity is a synthetic/composite field
         you don't want as a visible column.
+    sort_rows : bool — if True, rendered rows are sorted by their identity key
+        instead of preserving source order. When the key is order-bearing (e.g.
+        a date-prefixed composite), this keeps every change — including removed
+        rows — in key order rather than appending removals at the end. Default
+        False (preserve source order).
     """
 
     def __init__(self, source, *, title="Diff Explorer", key=None,
                  output=None, columns=None, hide_columns=None,
-                 note_field="note", changes_only=True, show_key=True):
+                 note_field="note", changes_only=True, show_key=True,
+                 sort_rows=False):
         if isinstance(source, dict):
             self.json_source = None
             self._data = source
@@ -331,6 +337,7 @@ class DiffTable:
         self.note_field = note_field
         self.changes_only = changes_only
         self._show_key = show_key
+        self._sort_rows = sort_rows
 
     @classmethod
     def from_files(cls, files, *, data_field=None, date_field=None,
@@ -464,6 +471,7 @@ class DiffTable:
             NOTE_FIELD=json.dumps(self.note_field),
             VERSIONS=json.dumps(versions),
             CHANGES_ONLY=json.dumps(self.changes_only),
+            SORT_ROWS=json.dumps(self._sort_rows),
         )
         return HTML_TEMPLATE.substitute(
             TITLE=_esc(self.title),

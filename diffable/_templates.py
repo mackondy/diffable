@@ -638,6 +638,7 @@ JS_TEMPLATE = Template("""
     const NOTE_FIELD   = $NOTE_FIELD;
     const VERSIONS     = $VERSIONS;
     const CHANGES_ONLY = $CHANGES_ONLY;
+    const SORT_ROWS    = $SORT_ROWS;
 
     // Single-version docs: no time-machine UI. Hide the version
     // dropdown and the "Changes only" toggle since neither has any
@@ -1000,6 +1001,19 @@ JS_TEMPLATE = Template("""
         // Append removed rows (in prev but not in curr) at the end
         for (const pk of pMap.keys()) {
             if (!usedKeys.has(pk)) ordered.push(pk);
+        }
+
+        // Optionally sort every rendered row by its identity key (the part
+        // before the occurrence suffix). When the caller's key is order-bearing
+        // (e.g. a date-prefixed composite), this yields a stable chronological
+        // order with removed rows interleaved in place rather than clumped at
+        // the end. Spacer rows (null) sort last.
+        if (SORT_ROWS) {
+            ordered.sort(function (a, b) {
+                if (a === null) return b === null ? 0 : 1;
+                if (b === null) return -1;
+                return a < b ? -1 : a > b ? 1 : 0;
+            });
         }
 
         let html = '';
