@@ -308,11 +308,15 @@ class DiffTable:
         nothing to compare against. Trades baseline-view fidelity for a
         much smaller, faster-loading HTML file when most rows are unchanged
         across versions.
+    show_key : bool — if True (default) the key column is rendered as the
+        sticky first column. Set False to match rows on the key without
+        displaying it — e.g. when identity is a synthetic/composite field
+        you don't want as a visible column.
     """
 
     def __init__(self, source, *, title="Diff Explorer", key=None,
                  output=None, columns=None, hide_columns=None,
-                 note_field="note", changes_only=True):
+                 note_field="note", changes_only=True, show_key=True):
         if isinstance(source, dict):
             self.json_source = None
             self._data = source
@@ -326,6 +330,7 @@ class DiffTable:
         self._hide_columns = set(hide_columns) if hide_columns else set()
         self.note_field = note_field
         self.changes_only = changes_only
+        self._show_key = show_key
 
     @classmethod
     def from_files(cls, files, *, data_field=None, date_field=None,
@@ -418,9 +423,14 @@ class DiffTable:
         if self._hide_columns:
             display_cols = [c for c in display_cols if c not in self._hide_columns]
 
+        # The key matches rows across versions; by default it is also shown as
+        # the (sticky) first column. show_key=False uses it purely for matching
+        # — useful when the natural row identity is a synthetic/composite field
+        # you don't want cluttering the rendered table.
         if key in display_cols:
             display_cols.remove(key)
-        display_cols.insert(0, key)
+        if self._show_key:
+            display_cols.insert(0, key)
 
         if self._output:
             out_path = self._output
