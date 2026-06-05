@@ -650,11 +650,21 @@ STYLE = """
         body.row-status tbody tr.diff-removed  th:first-child { box-shadow: inset 3px 0 0 #ff3b30; }
         body.row-status tbody tr.diff-modified th:first-child { box-shadow: inset 3px 0 0 #ff9f0a; }
         body.row-status tbody tr.row-active     th:first-child { box-shadow: inset 3px 0 0 #2563eb; }
+        /* Fixed-width slot so the value after the badge aligns down the
+           column regardless of label length. --badge-w is measured to the
+           widest badge on the page (renderTable); the pill itself hugs its
+           text, left-aligned within the slot. */
+        .row-badge-slot {
+            display: inline-block;
+            width: var(--badge-w, auto);
+            margin-right: 10px;
+            vertical-align: baseline;
+        }
         .row-badge {
-            display: inline-block; font-size: 9.5px; font-weight: 700;
-            text-transform: uppercase; letter-spacing: .04em;
-            padding: 1px 6px; border-radius: 999px; margin-right: 8px;
-            vertical-align: 1.5px; white-space: nowrap;
+            display: inline-block; font-size: 9px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .02em;
+            padding: 1px 6px; border-radius: 999px;
+            vertical-align: 1px; white-space: nowrap;
         }
         .row-badge-added    { background: #e2f7e9; color: #1a7f37; }
         .row-badge-removed  { background: #fde7e5; color: #b3261e; }
@@ -1127,8 +1137,8 @@ JS_TEMPLATE = Template("""
                         }
                     }
                 }
-                rowBadge = '<span class="row-badge row-badge-' + status + '">'
-                         + esc(label) + '</span>';
+                rowBadge = '<span class="row-badge-slot"><span class="row-badge row-badge-'
+                         + status + '">' + esc(label) + '</span></span>';
             }
 
             const rowIdx = ri;
@@ -1193,7 +1203,18 @@ JS_TEMPLATE = Template("""
             html += '</tr>';
         }
 
-        document.getElementById('table-body').innerHTML = html;
+        const tbody = document.getElementById('table-body');
+        tbody.innerHTML = html;
+
+        // Size every status-badge slot to the widest badge on the page so the
+        // value after it aligns down the first column (label lengths vary).
+        if (ROW_STATUS) {
+            let maxW = 0;
+            tbody.querySelectorAll('.row-badge').forEach(function (b) {
+                if (b.offsetWidth > maxW) maxW = b.offsetWidth;
+            });
+            tbody.style.setProperty('--badge-w', maxW ? maxW + 'px' : 'auto');
+        }
 
         // Store current diff data for panel use
         window._diffState = { cMap, pMap, ordered, prev, statusMap };
