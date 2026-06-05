@@ -426,8 +426,11 @@ STYLE = """
         .timeline-rail {
             /* Two label columns share the rail: months on the left
                (right-aligned), version names on the right (after the
-               tick stub). 170px gives both columns enough room. */
-            width: 170px;
+               tick stub). Width must hold the longest version label to
+               its right without spilling past the viewport edge (the rail
+               is the last flex column); .tl-tick-label caps + ellipsizes
+               anything longer so it can never clip off-screen. */
+            width: 230px;
             flex-shrink: 0;
             align-self: flex-start;
             height: 100vh;
@@ -496,6 +499,11 @@ STYLE = """
             opacity: var(--tl-prox);
             transform: translateX(calc(-6px + var(--tl-prox) * 6px));
             white-space: nowrap;
+            /* Safety net: a label longer than the rail's right column
+               ellipsizes instead of spilling off the viewport edge. */
+            max-width: 124px;
+            overflow: hidden;
+            text-overflow: ellipsis;
             pointer-events: none;
             background: var(--tl-label-bg);
             padding: 1px 5px;
