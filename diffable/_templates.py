@@ -641,6 +641,25 @@ STYLE = """
            never collides with the zebra/hover background rules. */
         tbody tr.row-active th { box-shadow: inset 3px 0 0 #2563eb; }   /* blue-600 */
 
+        /* --- Row-status accents (opt-in: row_status) ---
+           A coloured left edge per change kind (drawn as an inset shadow on the
+           sticky first cell, like .row-active) plus a small badge in that cell,
+           so the kind of change scans at a glance. The active-row blue accent
+           always wins (it's the interaction state). */
+        body.row-status tbody tr.diff-added    th:first-child { box-shadow: inset 3px 0 0 #34c759; }
+        body.row-status tbody tr.diff-removed  th:first-child { box-shadow: inset 3px 0 0 #ff3b30; }
+        body.row-status tbody tr.diff-modified th:first-child { box-shadow: inset 3px 0 0 #ff9f0a; }
+        body.row-status tbody tr.row-active     th:first-child { box-shadow: inset 3px 0 0 #2563eb; }
+        .row-badge {
+            display: inline-block; font-size: 9.5px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .04em;
+            padding: 1px 6px; border-radius: 999px; margin-right: 8px;
+            vertical-align: 1.5px; white-space: nowrap;
+        }
+        .row-badge-added    { background: #e2f7e9; color: #1a7f37; }
+        .row-badge-removed  { background: #fde7e5; color: #b3261e; }
+        .row-badge-modified { background: #fdf0db; color: #9a6700; }
+
         /* Status chips: tinted fill + hairline ring (GitHub / Linear). */
         .status-tag.tag-added    { background: #ecfdf5; color: #047857; box-shadow: inset 0 0 0 1px #a7f3d0; }
         .status-tag.tag-removed  { background: #fef2f2; color: #b91c1c; box-shadow: inset 0 0 0 1px #fecaca; }
@@ -662,6 +681,10 @@ JS_TEMPLATE = Template("""
     const CHANGES_ONLY = $CHANGES_ONLY;
     const SORT_ROWS    = $SORT_ROWS;
     const CELL_DIFF    = $CELL_DIFF;
+    const ROW_STATUS    = $ROW_STATUS;
+    const STATUS_LABELS = $STATUS_LABELS;
+    const MODIFIED_RULES = $MODIFIED_RULES;
+    if (ROW_STATUS) document.body.classList.add('row-status');
 
     // Single-version docs: no time-machine UI. Hide the version
     // dropdown and the "Changes only" toggle since neither has any
@@ -1084,8 +1107,29 @@ JS_TEMPLATE = Template("""
 
             const item = c || p;
             let rowCls = '';
-            if (status === 'added')   rowCls = 'diff-added';
-            if (status === 'removed') rowCls = 'diff-removed';
+            if (status === 'added')    rowCls = 'diff-added';
+            if (status === 'removed')  rowCls = 'diff-removed';
+            if (status === 'modified') rowCls = 'diff-modified';
+
+            // Row-status badge (opt-in): the kind of change, shown in the row's
+            // first cell. For a modified row, the first MODIFIED_RULES column
+            // that actually changed picks a domain label (e.g. Teacher -> "Sub");
+            // otherwise it falls back to STATUS_LABELS.modified.
+            let rowBadge = '';
+            if (ROW_STATUS && status !== 'unchanged') {
+                let label = STATUS_LABELS[status] || status;
+                if (status === 'modified' && c && p) {
+                    for (let mi = 0; mi < MODIFIED_RULES.length; mi++) {
+                        const mcol = MODIFIED_RULES[mi][0];
+                        if (String(c[mcol] ?? '') !== String(p[mcol] ?? '')) {
+                            label = MODIFIED_RULES[mi][1];
+                            break;
+                        }
+                    }
+                }
+                rowBadge = '<span class="row-badge row-badge-' + status + '">'
+                         + esc(label) + '</span>';
+            }
 
             const rowIdx = ri;
 
@@ -1141,7 +1185,7 @@ JS_TEMPLATE = Template("""
                     : ' onclick="showCellDetails(' + rowIdx + ',' + ci + ',this)"';
                 const dataAttrs = ' data-row="' + rowIdx + '" data-col="' + ci + '"';
                 if (ci === 0) {
-                    html += '<th class="' + cellCls + '"' + dataAttrs + cellClick + '>' + cell + '</th>';
+                    html += '<th class="' + cellCls + '"' + dataAttrs + cellClick + '>' + rowBadge + cell + '</th>';
                 } else {
                     html += '<td class="' + cellCls + '"' + dataAttrs + cellClick + '>' + cell + '</td>';
                 }

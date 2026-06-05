@@ -323,12 +323,25 @@ class DiffTable:
         renders the whole old value (struck through, red) → the whole new value
         (green) instead — far clearer for short structured values such as dates,
         times, and names, where an interleaved char diff is hard to read.
+    row_status : bool — if True, every changed row gets a coloured left-border
+        accent (added=green, removed=red, modified=amber) and a small status badge
+        in its first cell, so the *kind* of change scans at a glance. Default False.
+    status_labels : dict or None — override the badge text per status, e.g.
+        ``{"removed": "Cancelled", "modified": "Changed"}``. Defaults to
+        Added / Removed / Modified.
+    modified_rules : list[[column, label]] or None — for a *modified* row, the
+        first listed column that actually changed picks the badge label (e.g.
+        ``[["Teacher", "Sub"], ["Start Time", "Rescheduled"]]`` labels a row "Sub"
+        when the teacher changed, else "Rescheduled" when the time did). Falls back
+        to ``status_labels["modified"]`` if no rule matches. Only used when
+        ``row_status`` is True.
     """
 
     def __init__(self, source, *, title="Diff Explorer", key=None,
                  output=None, columns=None, hide_columns=None,
                  note_field="note", changes_only=True, show_key=True,
-                 sort_rows=False, cell_diff="auto"):
+                 sort_rows=False, cell_diff="auto", row_status=False,
+                 status_labels=None, modified_rules=None):
         if isinstance(source, dict):
             self.json_source = None
             self._data = source
@@ -345,6 +358,12 @@ class DiffTable:
         self._show_key = show_key
         self._sort_rows = sort_rows
         self._cell_diff = cell_diff
+        self._row_status = row_status
+        self._status_labels = {"added": "Added", "removed": "Removed",
+                               "modified": "Modified"}
+        if status_labels:
+            self._status_labels.update(status_labels)
+        self._modified_rules = modified_rules or []
 
     @classmethod
     def from_files(cls, files, *, data_field=None, date_field=None,
@@ -480,6 +499,9 @@ class DiffTable:
             CHANGES_ONLY=json.dumps(self.changes_only),
             SORT_ROWS=json.dumps(self._sort_rows),
             CELL_DIFF=json.dumps(self._cell_diff),
+            ROW_STATUS=json.dumps(self._row_status),
+            STATUS_LABELS=json.dumps(self._status_labels),
+            MODIFIED_RULES=json.dumps(self._modified_rules),
         )
         return HTML_TEMPLATE.substitute(
             TITLE=_esc(self.title),
