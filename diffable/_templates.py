@@ -324,6 +324,15 @@ STYLE = """
         .diff-old { opacity: 0.7; margin-right: 8px; }
         .diff-new { font-weight: 500; }
 
+        /* Opt-in "before → after" cell rendering (cell_diff="before-after"):
+           the whole old value struck through in red, an arrow, then the whole
+           new value in green. Clearer than an interleaved char diff for short
+           structured values (dates, times, names). */
+        .cell-ba-old   { color: #b3261e; text-decoration: line-through;
+                         text-decoration-color: rgba(179,38,30,.45); }
+        .cell-ba-arrow { color: #9ca3af; margin: 0 .4em; }
+        .cell-ba-new   { color: #1a7f37; font-weight: 600; }
+
         /* Side-panel split blocks. The pink/green row tint frames the
            before/after pair; inner .hi marks (defined above) emphasise
            the specific change without their own fill. */
@@ -644,6 +653,7 @@ JS_TEMPLATE = Template("""
     const VERSIONS     = $VERSIONS;
     const CHANGES_ONLY = $CHANGES_ONLY;
     const SORT_ROWS    = $SORT_ROWS;
+    const CELL_DIFF    = $CELL_DIFF;
 
     // Single-version docs: no time-machine UI. Hide the version
     // dropdown and the "Changes only" toggle since neither has any
@@ -1080,7 +1090,16 @@ JS_TEMPLATE = Template("""
                 let cellCls = '';
                 if (status === 'modified' && c && p && String(c[col] ?? '') !== String(p[col] ?? '')) {
                     const d = inlineDiff(p[col], c[col]);
-                    if (d.dissimilar) {
+                    if (CELL_DIFF === 'before-after' && cVal !== '' && pVal !== '') {
+                        // Whole old value (struck, red) -> whole new value (green).
+                        // Clearer than an interleaved char diff for short, structured
+                        // values (dates, times, names). Empty<->value still falls
+                        // through to the added/removed pill below.
+                        cell = '<span class="cell-ba-old">' + pVal + '</span>'
+                             + '<span class="cell-ba-arrow">→</span>'
+                             + '<span class="cell-ba-new">' + cVal + '</span>';
+                        cellCls = ' cell-modified cell-ba';
+                    } else if (d.dissimilar) {
                         // value↔empty: show the surviving side as a pill
                         // (matches the row-level diff-added / diff-removed
                         // colour family).

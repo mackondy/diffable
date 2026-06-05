@@ -317,12 +317,18 @@ class DiffTable:
         a date-prefixed composite), this keeps every change — including removed
         rows — in key order rather than appending removals at the end. Default
         False (preserve source order).
+    cell_diff : str — how a modified cell is rendered. "auto" (default) uses the
+        inline word/character diff (interleaved pink/green marks), best for long
+        identifiers where you want to spot the one changed character. "before-after"
+        renders the whole old value (struck through, red) → the whole new value
+        (green) instead — far clearer for short structured values such as dates,
+        times, and names, where an interleaved char diff is hard to read.
     """
 
     def __init__(self, source, *, title="Diff Explorer", key=None,
                  output=None, columns=None, hide_columns=None,
                  note_field="note", changes_only=True, show_key=True,
-                 sort_rows=False):
+                 sort_rows=False, cell_diff="auto"):
         if isinstance(source, dict):
             self.json_source = None
             self._data = source
@@ -338,6 +344,7 @@ class DiffTable:
         self.changes_only = changes_only
         self._show_key = show_key
         self._sort_rows = sort_rows
+        self._cell_diff = cell_diff
 
     @classmethod
     def from_files(cls, files, *, data_field=None, date_field=None,
@@ -472,6 +479,7 @@ class DiffTable:
             VERSIONS=json.dumps(versions),
             CHANGES_ONLY=json.dumps(self.changes_only),
             SORT_ROWS=json.dumps(self._sort_rows),
+            CELL_DIFF=json.dumps(self._cell_diff),
         )
         return HTML_TEMPLATE.substitute(
             TITLE=_esc(self.title),
