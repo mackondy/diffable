@@ -762,7 +762,15 @@ class ZipDiff:
                 had_commit = False
                 for entry in all_entries:
                     self._replace_entry(zf, entry, visible, zip_entries, wrapper)
-                    self._git("add", "-A", "--", entry)
+                    entry_path = self.work_dir / entry
+                    if entry_path.exists():
+                        self._git("add", "-A", "--", entry)
+                    else:
+                        # Entry was deleted (present in a previous zip but not
+                        # this one). Use --ignore-unmatch so git doesn't error
+                        # when the path has never been committed on this branch.
+                        self._git("rm", "-r", "--cached", "--ignore-unmatch",
+                                  "--", entry)
                     if self._has_staged_changes():
                         self._git("commit", "-m", entry)
                         had_commit = True
